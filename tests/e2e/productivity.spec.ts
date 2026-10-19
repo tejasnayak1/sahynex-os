@@ -8,7 +8,10 @@ test('search applies as you type, with the filter kept in the URL', async ({ pag
   await page.getByRole('searchbox', { name: 'Search' }).fill(firstName);
   await expect(page).toHaveURL(new RegExp(`[?&]q=${encodeURIComponent(firstName)}`));
   await expect(page.locator('tbody tr').first()).toContainText(firstName);
-  // Dropdown filters apply immediately too.
+  // Other filters sit behind the Filters toggle (open automatically once a filter is active).
+  await page.getByText('Hide filters').waitFor({ state: 'attached' });
+  if (!(await page.getByRole('combobox', { name: 'Stage' }).isVisible()))
+    await page.getByText('Filters', { exact: true }).click();
   await page.getByRole('combobox', { name: 'Stage' }).selectOption('new');
   await expect(page).toHaveURL(/stage=new/);
 });

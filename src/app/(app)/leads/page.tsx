@@ -24,7 +24,7 @@ import { LEAD_STAGES, listLeadSources, listLeads } from '@/server/services/leads
 import { listSavedViews } from '@/server/services/views';
 import { SavedViews } from '../_shared/saved-views';
 import { bulkAssignAction } from './actions';
-import { SelectAll, SelectedCount } from '@/components/client/select-all';
+import { BulkBar, SelectAll, SelectedCount } from '@/components/client/select-all';
 
 export const metadata = { title: 'CRM & leads' };
 
@@ -187,7 +187,7 @@ export default async function LeadsPage({
       ) : (
         <ActionForm action={bulkAssignAction} id="lead-bulk">
           {canAssign ? (
-            <div className="mb-2 flex flex-wrap items-center gap-2 text-[13px]">
+            <BulkBar form="lead-bulk">
               <SelectedCount form="lead-bulk" />
               <span className="text-muted">·</span>
               <Select
@@ -204,7 +204,7 @@ export default async function LeadsPage({
               >
                 Reassign
               </SubmitButton>
-            </div>
+            </BulkBar>
           ) : null}
           <Table>
             <thead>
@@ -215,13 +215,10 @@ export default async function LeadsPage({
                   </Th>
                 ) : null}
                 <SortTh label="Lead" field="name" params={sp} base={base} />
-                <Th>Interest</Th>
                 <Th>Source</Th>
                 <SortTh label="Stage" field="stage" params={sp} base={base} />
-                <SortTh label="Score" field="score" params={sp} base={base} align="right" />
                 <Th>Owner</Th>
                 <SortTh label="Next action" field="nextActionAt" params={sp} base={base} />
-                <SortTh label="Created" field="createdAt" params={sp} base={base} />
               </tr>
             </thead>
             <tbody>
@@ -255,23 +252,19 @@ export default async function LeadsPage({
                         ) : l.organisationName ? (
                           <span>· {l.organisationName}</span>
                         ) : null}
+                        {l.interest ? <span className="max-w-[260px] truncate">· {l.interest}</span> : null}
                         {l.possibleDuplicateOfId ? <Badge tone="warn">Possible duplicate</Badge> : null}
                         {l.suppressed ? <Badge>Opted out</Badge> : null}
                       </div>
                     </Td>
-                    <Td className="max-w-[180px] truncate">{l.interest ?? '—'}</Td>
                     <Td>{l.sourceName ?? '—'}</Td>
                     <Td>
                       <StatusBadge status={l.stage} />
-                    </Td>
-                    <Td align="right" className="tabular">
-                      {l.score ?? '—'}
                     </Td>
                     <Td>{l.ownerName ?? <span className="text-warn">Unassigned</span>}</Td>
                     <Td className={overdue ? 'font-medium text-bad' : ''}>
                       {l.nextActionAt ? relativeTime(l.nextActionAt) : '—'}
                     </Td>
-                    <Td className="text-muted">{relativeTime(l.createdAt)}</Td>
                   </tr>
                 );
               })}

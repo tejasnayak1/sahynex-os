@@ -9,7 +9,7 @@ import { dealScope, leadScope } from '../access';
 import { audit } from '../audit';
 import { invalid, notFound, precondition } from '../errors';
 import { sendMail, type MailResult } from '../mailer';
-import { bool, optDateTime, optInt, optStr, optUuid, parse, reqStr } from '../validation';
+import { bool, optDateTime, optInt, optStr, optUuid, parse } from '../validation';
 import { changeDealStage } from './deals';
 import { createSystemTask } from './tasks';
 

@@ -7,6 +7,9 @@ export function loadEnv(file = '.env') {
     const m = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/);
     if (!m || line.trim().startsWith('#')) continue;
     const [, k, raw] = m;
-    if (process.env[k] === undefined) process.env[k] = raw.replace(/^['"]|['"]$/g, '');
+    const v = raw.trim();
+    // Quoted values are taken literally; unquoted values drop an inline " # comment" (like dotenv).
+    const value = /^(['"]).*\1$/.test(v) ? v.slice(1, -1) : v.replace(/\s+#.*$/, '').trim();
+    if (process.env[k] === undefined) process.env[k] = value;
   }
 }

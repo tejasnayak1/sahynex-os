@@ -89,3 +89,11 @@ Re-verified the existing build from a clean database before changing anything (a
 - **Discovery meetings** (new `meetings` table, migration `0002_meetings`): schedule from a deal or lead, calendar task for the organiser, reschedule/cancel with versioned `.ics` invites, optional SMTP email, outcome recording that can advance the deal to “Discovery completed”.
 - **WhatsApp Business adapter** (Cloud API) with the safeguards listed under Integrations, a new `messaging.whatsapp` permission, and a seeded Demo mode.
 - **Fixes:** every dialog's accessible name was broken (an `aria-labelledby` id built from a title containing spaces) — now uses a generated id; duplicate screen-reader announcement of selection counts; lead rows with a “Possible duplicate” badge wrapped the reference mid-word; file-storage build warnings removed.
+
+## Session 3 (20 Oct 2026) — simpler interface
+
+- **Home page** (`/home`) is now where everyone lands: today's tasks with one-click _Done_, leads to follow up, today's meetings, approvals waiting, quick-add buttons and the daily-update nudge. Executives also get a one-line 30-day summary linking to the Business dashboard.
+- **Business dashboard** (renamed from Executive dashboard) shows four headline numbers, _Needs attention_ (top 6, rest behind "Show more") and targets; everything else is under **Show more numbers**.
+- **List pages**: only search is always visible; other filters sit behind **Filters** (opens automatically when a filter is active). Bulk-action bars appear only after rows are ticked. The leads table has five columns (interest moved under the name).
+- Fixed a test that used UTC dates and failed between 00:00 and 05:30 IST.
+- Verified: typecheck, lint, format, 119/119 unit+integration, production build, 14/14 e2e (including accessibility on the new Home page).

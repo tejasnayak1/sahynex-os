@@ -17,11 +17,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     approvalQueue(actor),
   ]);
   const nav: NavItem[] = [
-    {
-      href: '/dashboard',
-      label: can(actor, 'dashboard.executive') ? 'Executive dashboard' : 'My work',
-      icon: 'Gauge',
-    },
+    actor.clientId
+      ? { href: '/dashboard', label: 'Shared with me', icon: 'Gauge' }
+      : { href: '/home', label: 'Home', icon: 'House' },
+    ...(can(actor, 'dashboard.executive') && !actor.clientId
+      ? [{ href: '/dashboard', label: 'Business dashboard', icon: 'Gauge' as const }]
+      : []),
     ...(canAny(actor, 'leads.read.all', 'leads.read.own')
       ? [{ href: '/leads', label: 'CRM & leads', icon: 'Users' as const }]
       : []),

@@ -9,7 +9,7 @@ import type { ActionState } from '@/server/action';
 export async function loginAction(_: ActionState, fd: FormData): Promise<ActionState> {
   const email = String(fd.get('email') ?? '');
   const password = String(fd.get('password') ?? '');
-  const next = String(fd.get('next') ?? '/dashboard');
+  const next = String(fd.get('next') ?? '/home');
   if (!email || !password) return { ok: false, error: 'Enter your email and password.', at: Date.now() };
   try {
     const { token, expiresAt } = await authenticate(email, password, await requestMeta());
@@ -17,7 +17,7 @@ export async function loginAction(_: ActionState, fd: FormData): Promise<ActionS
     // Only allow same-site relative redirects.
     return {
       ok: true,
-      redirectTo: next.startsWith('/') && !next.startsWith('//') ? next : '/dashboard',
+      redirectTo: next.startsWith('/') && !next.startsWith('//') ? next : '/home',
       at: Date.now(),
     };
   } catch (e) {

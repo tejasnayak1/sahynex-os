@@ -1,7 +1,8 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { and, asc, eq } from 'drizzle-orm';
 import { TrendChart } from '@/components/client/charts';
-import { DemoBadge, LinkButton, Notice, PageHeader, Panel, Select, Stat, buttonClass } from '@/components/ui';
+import { DemoBadge, LinkButton, Notice, PageHeader, Panel, Select, Stat } from '@/components/ui';
 import { db, schema } from '@/db';
 import { formatMoney, formatNumber, formatPercent, todayIn } from '@/lib/format';
 import { pctChange } from '@/lib/metrics';
@@ -26,6 +27,8 @@ export default async function Dashboard({
   const org = await getOrg(db, actor.orgId);
   const ac = await actionCentre(actor);
 
+  // Team members start from their personal Home page; only external reviewers use this view.
+  if (!can(actor, 'dashboard.executive') && !actor.clientId) redirect('/home');
   if (!can(actor, 'dashboard.executive')) {
     const mw = await myWork(actor);
     const [submitted] = actor.clientId
@@ -93,7 +96,7 @@ export default async function Dashboard({
   return (
     <>
       <PageHeader
-        title="Executive dashboard"
+        title="Business dashboard"
         description={`${d.period.from} to ${d.period.to} · compared with the previous ${d.period.days} days`}
         actions={
           <FilterForm
@@ -129,9 +132,6 @@ export default async function Dashboard({
               options={teams.map((t) => ({ value: t.id, label: t.name }))}
               className="w-36"
             />
-            <button className={buttonClass('secondary')} type="submit">
-              Apply
-            </button>
           </FilterForm>
         }
       />
@@ -144,25 +144,12 @@ export default async function Dashboard({
         </div>
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat
           label="Leads"
           value={formatNumber(d.leads.cur.total)}
           delta={pctChange(d.leads.cur.total, d.leads.prev.total)}
           href="/leads"
-        />
-        <Stat
-          label="Qualified leads"
-          value={formatNumber(d.leads.cur.qualified)}
-          delta={pctChange(d.leads.cur.qualified, d.leads.prev.qualified)}
-          href="/leads?qualification=qualified"
-        />
-        <Stat
-          label="Campaign spend"
-          value={formatMoney(c.spendMinor, cur, { compact: true })}
-          delta={pctChange(c.spendMinor, p.spendMinor)}
-          demo={demo}
-          href="/campaigns"
         />
         <Stat
           label="Cost per lead"
@@ -173,64 +160,23 @@ export default async function Dashboard({
           sub={c.cplMinor == null ? 'No leads or spend' : undefined}
         />
         <Stat
-          label="Cost per qualified lead"
-          value={formatMoney(c.cpqlMinor, cur)}
-          delta={pctChange(c.cpqlMinor, p.cpqlMinor)}
-          invert
-          demo={demo}
-        />
-        <Stat
-          label="Admissions (verified)"
-          value={d.conversions.admissions == null ? 'Unavailable' : formatNumber(d.conversions.admissions)}
-          sub={
-            d.conversions.applications != null
-              ? `${d.conversions.applications} applications`
-              : 'No verified records'
-          }
-        />
-      </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Stat
-          label="Weighted pipeline"
-          value={formatMoney(d.pipeline.weighted, cur, { compact: true })}
-          sub={`${d.pipeline.open} open deals`}
-          href="/pipeline"
-        />
-        <Stat
           label="Won revenue"
           value={formatMoney(d.pipeline.wonValue, cur, { compact: true })}
           delta={pctChange(d.pipeline.wonValue, d.pipeline.wonValuePrev)}
           sub={`${d.pipeline.won} deals`}
         />
         <Stat
-          label="Proposals sent"
-          value={d.pipeline.proposalsSent}
-          sub={formatMoney(d.pipeline.proposalValue, cur, { compact: true })}
-        />
-        <Stat
-          label="Active clients / projects"
-          value={`${d.counts.activeClients} / ${d.counts.activeProjects}`}
-          href="/projects?status=active"
-        />
-        <Stat
           label="Tasks done / overdue"
           value={`${d.counts.tasksDone} / ${d.counts.tasksOverdue}`}
           href="/tasks?overdue=1"
         />
-        <Stat
-          label="Pending client approvals"
-          value={d.counts.pendingClientApprovals}
-          sub={`${d.counts.pendingInternalApprovals} internal · ${d.counts.reportsInReview} reports to review`}
-          href="/approvals"
-        />
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+        <Panel title="Needs attention" bodyClassName="p-0">
+          <ActionCentre data={ac} currency={cur} max={6} />
+        </Panel>
         <div className="space-y-5">
-          <Panel title="Leads and spend" actions={<DemoBadge show={demo} />}>
-            <TrendChart data={d.series} currency={cur} />
-          </Panel>
           <Panel
             title="Targets vs actual"
             actions={<span className="text-[12.5px] text-muted">For the selected period</span>}
@@ -273,69 +219,136 @@ export default async function Dashboard({
               </p>
             )}
           </Panel>
-          <Panel
-            title="Campaign efficiency"
-            actions={
-              <LinkButton size="sm" href="/campaigns">
-                All campaigns
-              </LinkButton>
-            }
-          >
-            <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {[
-                ['CTR', formatPercent(c.ctr, 2)],
-                ['CPC', formatMoney(c.cpcMinor, cur)],
-                ['Platform CPL', formatMoney(c.platformCplMinor, cur)],
-                ['Landing-page conversion', formatPercent(c.lpConversion)],
-              ].map(([k, v]) => (
-                <div key={k}>
-                  <dt className="text-[12.5px] text-muted">{k}</dt>
-                  <dd className="text-[17px] font-semibold tabular">{v}</dd>
-                </div>
-              ))}
-            </dl>
-          </Panel>
-        </div>
-        <div className="space-y-5">
-          <Panel
-            title="Action centre"
-            bodyClassName="p-0"
-            actions={<span className="text-[12.5px] text-muted">Highest priority first</span>}
-          >
-            <ActionCentre data={ac} currency={cur} />
-          </Panel>
-          <Panel title="System health">
-            <ul className="space-y-1.5 text-[13.5px]">
-              <li className="flex justify-between">
-                <span>Automation failures (7 days)</span>
-                <Link
-                  href="/automation"
-                  className={d.counts.workflowFailures ? 'font-medium text-bad' : 'text-muted'}
-                >
-                  {d.counts.workflowFailures}
-                </Link>
-              </li>
-              <li className="flex justify-between">
-                <span>Open incidents</span>
-                <Link
-                  href="/campaigns/monitoring"
-                  className={d.counts.openIncidents ? 'font-medium text-bad' : 'text-muted'}
-                >
-                  {d.counts.openIncidents}
-                </Link>
-              </li>
-              {d.showFinance ? (
-                <li className="flex justify-between">
-                  <span>Profitability by project</span>
-                  <Link href="/finance?tab=profitability" className="text-accent">
-                    View
-                  </Link>
-                </li>
-              ) : null}
-            </ul>
-          </Panel>
         </div>
       </div>
+
+      <details className="group mt-5 rounded-lg border border-line bg-surface">
+        <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 font-medium hover:bg-surface-2">
+          <span>Show more numbers</span>
+          <span className="text-[13px] font-normal text-muted group-open:hidden">
+            Pipeline, spend, approvals, trends and system health
+          </span>
+          <span className="hidden text-[13px] font-normal text-muted group-open:inline">Hide</span>
+        </summary>
+        <div className="space-y-5 border-t border-line p-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+            <Stat
+              label="Qualified leads"
+              value={formatNumber(d.leads.cur.qualified)}
+              delta={pctChange(d.leads.cur.qualified, d.leads.prev.qualified)}
+              href="/leads?qualification=qualified"
+            />
+            <Stat
+              label="Campaign spend"
+              value={formatMoney(c.spendMinor, cur, { compact: true })}
+              delta={pctChange(c.spendMinor, p.spendMinor)}
+              demo={demo}
+              href="/campaigns"
+            />
+            <Stat
+              label="Cost per qualified lead"
+              value={formatMoney(c.cpqlMinor, cur)}
+              delta={pctChange(c.cpqlMinor, p.cpqlMinor)}
+              invert
+              demo={demo}
+            />
+            <Stat
+              label="Admissions (verified)"
+              value={
+                d.conversions.admissions == null ? 'Unavailable' : formatNumber(d.conversions.admissions)
+              }
+              sub={
+                d.conversions.applications != null
+                  ? `${d.conversions.applications} applications`
+                  : 'No verified records'
+              }
+            />
+            <Stat
+              label="Weighted pipeline"
+              value={formatMoney(d.pipeline.weighted, cur, { compact: true })}
+              sub={`${d.pipeline.open} open deals`}
+              href="/pipeline"
+            />
+            <Stat
+              label="Proposals sent"
+              value={d.pipeline.proposalsSent}
+              sub={formatMoney(d.pipeline.proposalValue, cur, { compact: true })}
+            />
+            <Stat
+              label="Active clients / projects"
+              value={`${d.counts.activeClients} / ${d.counts.activeProjects}`}
+              href="/projects?status=active"
+            />
+            <Stat
+              label="Pending client approvals"
+              value={d.counts.pendingClientApprovals}
+              sub={`${d.counts.pendingInternalApprovals} internal · ${d.counts.reportsInReview} reports to review`}
+              href="/approvals"
+            />
+          </div>
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+            <div className="space-y-5">
+              <Panel title="Leads and spend" actions={<DemoBadge show={demo} />}>
+                <TrendChart data={d.series} currency={cur} />
+              </Panel>
+              <Panel
+                title="Campaign efficiency"
+                actions={
+                  <LinkButton size="sm" href="/campaigns">
+                    All campaigns
+                  </LinkButton>
+                }
+              >
+                <dl className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+                  {[
+                    ['CTR', formatPercent(c.ctr, 2)],
+                    ['CPC', formatMoney(c.cpcMinor, cur)],
+                    ['Platform CPL', formatMoney(c.platformCplMinor, cur)],
+                    ['Landing-page conversion', formatPercent(c.lpConversion)],
+                  ].map(([k, v]) => (
+                    <div key={k}>
+                      <dt className="text-[12.5px] text-muted">{k}</dt>
+                      <dd className="text-[17px] font-semibold tabular">{v}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </Panel>
+            </div>
+            <div className="space-y-5">
+              <Panel title="System health">
+                <ul className="space-y-1.5 text-[13.5px]">
+                  <li className="flex justify-between">
+                    <span>Automation failures (7 days)</span>
+                    <Link
+                      href="/automation"
+                      className={d.counts.workflowFailures ? 'font-medium text-bad' : 'text-muted'}
+                    >
+                      {d.counts.workflowFailures}
+                    </Link>
+                  </li>
+                  <li className="flex justify-between">
+                    <span>Open incidents</span>
+                    <Link
+                      href="/campaigns/monitoring"
+                      className={d.counts.openIncidents ? 'font-medium text-bad' : 'text-muted'}
+                    >
+                      {d.counts.openIncidents}
+                    </Link>
+                  </li>
+                  {d.showFinance ? (
+                    <li className="flex justify-between">
+                      <span>Profitability by project</span>
+                      <Link href="/finance?tab=profitability" className="text-accent">
+                        View
+                      </Link>
+                    </li>
+                  ) : null}
+                </ul>
+              </Panel>
+            </div>
+          </div>
+        </div>
+      </details>
       <p className="mt-6 text-[12.5px] text-muted">
         Definitions: CPL = spend ÷ CRM leads attributed to campaigns; qualified = leads meeting the configured
         qualification score. Missing data is shown as “Unavailable”, never as zero.{' '}

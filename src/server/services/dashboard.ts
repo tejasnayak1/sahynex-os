@@ -596,3 +596,97 @@ export async function monitorSummary(actor: Actor) {
     .from(monitoredPages)
     .where(and(eq(monitoredPages.orgId, actor.orgId), eq(monitoredPages.isActive, true)));
 }
+
+/**
+ * The personal "Home" page: what this person should do today. Only their own work — tasks they
+ * own that are overdue or due today, their leads waiting for a follow-up, and today's meetings.
+ * Day boundaries are in the organisation's timezone.
+ */
+export async function homeToday(actor: Actor) {
+  if (actor.kind !== 'user') return null;
+  const org = await getOrg(db, actor.orgId);
+  const { fromDateTimeLocal, todayIn } = await import('@/lib/format');
+  const today = todayIn(org.timezone);
+  const startOfDay = fromDateTimeLocal(`${today}T00:00`, org.timezone);
+  const endOfDay = fromDateTimeLocal(`${today}T23:59:59`, org.timezone);
+  const open = ['todo', 'in_progress', 'blocked', 'in_review'] as const;
+  const canLeads = can(actor, 'leads.read.own') || can(actor, 'leads.read.all');
+  const [taskRows, [taskCounts], leadRows, meetingRows] = await Promise.all([
+    db
+      .select({
+        id: tasks.id,
+        ref: tasks.ref,
+        title: tasks.title,
+        dueAt: tasks.dueAt,
+        status: tasks.status,
+        priority: tasks.priority,
+        projectName: projects.name,
+      })
+      .from(tasks)
+      .leftJoin(projects, eq(projects.id, tasks.projectId))
+      .where(
+        and(
+          eq(tasks.ownerId, actor.id),
+          isNull(tasks.deletedAt),
+          inArray(tasks.status, [...open]),
+          lt(tasks.dueAt, endOfDay),
+          // Meetings have their own section on Home; don't list them twice.
+          sql`coalesce(${tasks.sourceKey}, '') not like 'meeting:%'`,
+        ),
+      )
+      .orderBy(asc(tasks.dueAt))
+      .limit(10),
+    db
+      .select({
+        dueToday: sql<number>`count(*) filter (where ${tasks.dueAt} >= ${startOfDay} and ${tasks.dueAt} <= ${endOfDay})::int`,
+        overdue: sql<number>`count(*) filter (where ${tasks.dueAt} < now())::int`,
+        later: sql<number>`count(*) filter (where ${tasks.dueAt} > ${endOfDay} or ${tasks.dueAt} is null)::int`,
+      })
+      .from(tasks)
+      .where(and(eq(tasks.ownerId, actor.id), isNull(tasks.deletedAt), inArray(tasks.status, [...open]))),
+    canLeads
+      ? db
+          .select({
+            id: leads.id,
+            ref: leads.ref,
+            name: leads.name,
+            stage: leads.stage,
+            nextAction: leads.nextAction,
+            nextActionAt: leads.nextActionAt,
+            organisationName: leads.organisationName,
+          })
+          .from(leads)
+          .where(
+            and(
+              eq(leads.ownerId, actor.id),
+              isNull(leads.deletedAt),
+              eq(leads.isTest, false),
+              inArray(leads.stage, ['new', 'contacted', 'qualified']),
+              sql`(${leads.stage} = 'new' or ${leads.nextActionAt} <= ${endOfDay})`,
+            ),
+          )
+          .orderBy(sql`${leads.nextActionAt} asc nulls first`)
+          .limit(8)
+      : Promise.resolve([]),
+    db
+      .select({
+        id: schema.meetings.id,
+        title: schema.meetings.title,
+        startAt: schema.meetings.startAt,
+        location: schema.meetings.location,
+        dealId: schema.meetings.dealId,
+        leadId: schema.meetings.leadId,
+      })
+      .from(schema.meetings)
+      .where(
+        and(
+          eq(schema.meetings.organizerId, actor.id),
+          eq(schema.meetings.status, 'scheduled'),
+          gte(schema.meetings.startAt, startOfDay),
+          lt(schema.meetings.startAt, endOfDay),
+        ),
+      )
+      .orderBy(asc(schema.meetings.startAt)),
+  ]);
+  return { today, tasks: taskRows, taskCounts, leads: leadRows, meetings: meetingRows };
+}

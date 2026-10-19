@@ -27,8 +27,11 @@ test('vertical slice: sign in → create lead → automatic owner + follow-up ta
   await page.getByRole('button', { name: 'Log activity' }).click();
   await expect(page.getByText('Called the principal; interested in a proposal.')).toBeVisible();
   await expect(page.getByLabel('Lead stage')).toHaveValue('contacted');
+  // Team members land on their personal Home page (the old /dashboard link still works).
   await page.goto('/dashboard');
-  await expect(page.getByRole('heading', { name: /Good to see you/ })).toBeVisible();
+  await expect(page).toHaveURL(/\/home$/);
+  await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), / })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your tasks for today' })).toBeVisible();
 });
 
 test('form validation shows actionable errors and keeps input', async ({ page }) => {
@@ -120,7 +123,7 @@ test('keyboard: Ctrl+K search finds permitted records and navigates', async ({ p
   await page.getByRole('combobox', { name: 'Search' }).fill('Demo Institute');
   await expect(page.getByRole('option').first()).toBeVisible();
   await page.keyboard.press('Enter');
-  await expect(page).not.toHaveURL(/\/dashboard$/);
+  await expect(page).not.toHaveURL(/\/(dashboard|home)$/);
 });
 
 test('handover approval creates a project with tasks', async ({ page }) => {

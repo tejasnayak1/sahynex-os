@@ -10,6 +10,8 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // Dev only: also allow opening the dev server as http://127.0.0.1:3000 (localhost is allowed by default).
+  allowedDevOrigins: ['127.0.0.1'],
   serverExternalPackages: ['@node-rs/argon2', 'pg'],
   experimental: { serverActions: { bodySizeLimit: '26mb' } },
   async headers() {
