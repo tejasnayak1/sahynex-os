@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { addDays, addMonths, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from 'date-fns';
 import { ActionForm, SubmitButton } from '@/components/client/action-form';
 import { InlineSelect } from '@/components/client/auto-submit';
-import { SelectAll, SelectedCount } from '@/components/client/select-all';
+import { BulkBar, SelectAll, SelectedCount } from '@/components/client/select-all';
 import {
   Badge,
   EmptyState,
@@ -472,11 +472,7 @@ export default async function TasksPage({
         <>
           {canEdit ? (
             <ActionForm action={bulkTaskAction} id="task-bulk">
-              <div
-                className="mb-2 flex flex-wrap items-center gap-2 text-[13px]"
-                role="group"
-                aria-label="Bulk actions"
-              >
+              <BulkBar form="task-bulk">
                 <SelectedCount form="task-bulk" />
                 <span className="text-muted">·</span>
                 <Select
@@ -509,7 +505,7 @@ export default async function TasksPage({
                 >
                   Apply to selected
                 </SubmitButton>
-              </div>
+              </BulkBar>
             </ActionForm>
           ) : null}
           <Table>

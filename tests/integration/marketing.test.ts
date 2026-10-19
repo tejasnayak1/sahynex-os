@@ -35,7 +35,12 @@ beforeAll(async () => {
 });
 afterAll(() => new Promise<void>((r) => server.close(() => r())));
 
-const ymd = (daysAgo: number) => new Date(Date.now() - daysAgo * 86400000).toISOString().slice(0, 10);
+// Calendar dates in the organisation's timezone (Asia/Kolkata by default), as the app reports them.
+// Using UTC here made this test fail between 00:00 and 05:30 IST.
+const ymd = (daysAgo: number) =>
+  new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata' }).format(
+    new Date(Date.now() - daysAgo * 86400000),
+  );
 
 describe('campaign metrics', () => {
   it('imports CSV metrics after validating every row, and refuses partial imports', async () => {

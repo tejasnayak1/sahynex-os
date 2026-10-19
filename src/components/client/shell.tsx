@@ -12,6 +12,7 @@ import {
   ChevronsRight,
   FileText,
   Gauge,
+  House,
   IndianRupee,
   KanbanSquare,
   ListChecks,
@@ -33,6 +34,7 @@ import { cn } from '../ui';
 
 const ICONS = {
   Gauge,
+  House,
   Users,
   KanbanSquare,
   Building2,

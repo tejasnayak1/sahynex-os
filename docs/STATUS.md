@@ -89,3 +89,19 @@ Re-verified the existing build from a clean database before changing anything (a
 - **Discovery meetings** (new `meetings` table, migration `0002_meetings`): schedule from a deal or lead, calendar task for the organiser, reschedule/cancel with versioned `.ics` invites, optional SMTP email, outcome recording that can advance the deal to “Discovery completed”.
 - **WhatsApp Business adapter** (Cloud API) with the safeguards listed under Integrations, a new `messaging.whatsapp` permission, and a seeded Demo mode.
 - **Fixes:** every dialog's accessible name was broken (an `aria-labelledby` id built from a title containing spaces) — now uses a generated id; duplicate screen-reader announcement of selection counts; lead rows with a “Possible duplicate” badge wrapped the reference mid-word; file-storage build warnings removed.
+
+## Session 3 (20 Oct 2026) — simpler interface
+
+- **Home page** (`/home`) is now where everyone lands: today's tasks with one-click _Done_, leads to follow up, today's meetings, approvals waiting, quick-add buttons and the daily-update nudge. Executives also get a one-line 30-day summary linking to the Business dashboard.
+- **Business dashboard** (renamed from Executive dashboard) shows four headline numbers, _Needs attention_ (top 6, rest behind "Show more") and targets; everything else is under **Show more numbers**.
+- **List pages**: only search is always visible; other filters sit behind **Filters** (opens automatically when a filter is active). Bulk-action bars appear only after rows are ticked. The leads table has five columns (interest moved under the name).
+- Fixed a test that used UTC dates and failed between 00:00 and 05:30 IST.
+- Verified: typecheck, lint, format, 119/119 unit+integration, production build, 14/14 e2e (including accessibility on the new Home page).
+
+## Session 4 (20 Oct 2026) — daily briefing Home page
+
+- **Executive dashboard restored** exactly as before (layout, title, menu label); only the landing page changed.
+- **New Home page** for everyone: greeting with a one-line summary of the day and the next thing on the calendar, today's task progress ring, an **AI morning brief** (summary, priorities, ideas, social insights, trends — labelled as suggestions), today's schedule (Google Calendar + meetings booked in Sahynex OS), tasks with progress and one-click Done, calls to make (tap to call), inbox highlights, LinkedIn messages (from LinkedIn's email alerts — LinkedIn offers no API for reading messages) and Instagram today (followers and change, posts in 24h, engagement, best recent post).
+- **New integrations** (Settings → Integrations, each with Demo mode): Google Gmail & Calendar (per-person OAuth, read-only, refresh tokens encrypted with AES-256-GCM), Instagram Graph API (daily snapshots), AI assistant (Anthropic Messages API; one brief per person per day, refresh on request, max 6/day; facts sent are stored with the brief). None verified against live accounts in the build environment.
+- Migration `0003_personal_briefing` (enum values + `user_google_connections`, `instagram_snapshots`, `ai_briefs`).
+- Verified: typecheck, lint, format, 136/136 unit+integration (17 new), production build, 15/15 e2e including accessibility on Home.

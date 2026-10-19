@@ -57,3 +57,38 @@ export function SelectedCount({ form, name = 'ids' }: { form: string; name?: str
     </span>
   );
 }
+
+/**
+ * Bulk-action toolbar that stays out of the way until at least one row is ticked. It is hidden
+ * (not removed), so its fields still belong to the form when it appears.
+ */
+export function BulkBar({
+  form,
+  name = 'ids',
+  children,
+}: {
+  form: string;
+  name?: string;
+  children: React.ReactNode;
+}) {
+  const [count, setCount] = useState(0);
+  useEffect(() => {
+    const sync = () =>
+      setCount(
+        document.querySelectorAll(`input[type=checkbox][name="${name}"][form="${form}"]:checked`).length,
+      );
+    document.addEventListener('change', sync);
+    sync();
+    return () => document.removeEventListener('change', sync);
+  }, [form, name]);
+  return (
+    <div
+      hidden={count === 0}
+      role="group"
+      aria-label="Bulk actions"
+      className="mb-2 flex flex-wrap items-center gap-2 rounded-md border border-accent/30 bg-accent-soft px-3 py-2 text-[13px]"
+    >
+      {children}
+    </div>
+  );
+}

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { and, asc, eq } from 'drizzle-orm';
 import { TrendChart } from '@/components/client/charts';
 import { DemoBadge, LinkButton, Notice, PageHeader, Panel, Select, Stat, buttonClass } from '@/components/ui';
@@ -26,6 +27,8 @@ export default async function Dashboard({
   const org = await getOrg(db, actor.orgId);
   const ac = await actionCentre(actor);
 
+  // Team members start from their personal Home page; only external reviewers use this view.
+  if (!can(actor, 'dashboard.executive') && !actor.clientId) redirect('/home');
   if (!can(actor, 'dashboard.executive')) {
     const mw = await myWork(actor);
     const [submitted] = actor.clientId

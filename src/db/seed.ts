@@ -513,6 +513,17 @@ async function main() {
       ),
     );
 
+  // Briefing sources in Demo mode: sample inbox/calendar, Instagram numbers and a rule-based
+  // (not AI) brief — all labelled DEMO on the Home page.
+  for (const provider of ['google_workspace', 'instagram', 'ai_assistant'] as const)
+    await db
+      .insert(schema.integrationConnections)
+      .values({ orgId, provider, mode: 'demo', status: 'healthy', accountLabel: 'DEMO' })
+      .onConflictDoUpdate({
+        target: [schema.integrationConnections.orgId, schema.integrationConnections.provider],
+        set: { mode: 'demo', status: 'healthy', accountLabel: 'DEMO' },
+      });
+
   /* ------------------------------------------------------------ leads */
   const sources = ['meta_lead_ads', 'google_ads', 'website', 'referral', 'walk_in', 'instagram_dm'];
   const firstNames = [

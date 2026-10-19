@@ -5,7 +5,7 @@ import { LoginForm } from './login-form';
 export const metadata = { title: 'Sign in' };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ next?: string }> }) {
-  if (await getCurrentActor()) redirect('/dashboard');
+  if (await getCurrentActor()) redirect('/home');
   const { next } = await searchParams;
   return (
     <main id="main" className="grid min-h-dvh lg:grid-cols-[1fr_minmax(420px,520px)]">
@@ -44,7 +44,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <div className="w-full max-w-sm">
           <h1 className="text-[22px] font-semibold tracking-[-0.01em]">Sign in</h1>
           <p className="mb-6 mt-1 text-muted">Use the account your administrator created for you.</p>
-          <LoginForm next={next ?? '/dashboard'} />
+          <LoginForm next={next ?? '/home'} />
           <p className="mt-6 text-[12.5px] text-muted">
             Forgot your password? Ask an administrator to reset it in Settings → Users.
           </p>

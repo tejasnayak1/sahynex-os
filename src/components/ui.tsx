@@ -535,7 +535,11 @@ export function Select({
   );
 }
 
-/** GET filter bar — filters live in the URL so they persist, are shareable and survive reloads. */
+/**
+ * GET filter bar — filters live in the URL so they persist, are shareable and survive reloads.
+ * Only the search box is always visible; the other filters sit under a "Filters" toggle that opens
+ * by itself whenever a filter is in use, so everyday pages stay calm.
+ */
 export function FilterBar({
   action,
   children,
@@ -550,29 +554,46 @@ export function FilterBar({
   reset?: boolean;
 }) {
   return (
-    <FilterForm action={action} className="mb-3 flex flex-wrap items-end gap-2">
-      <div className="w-full sm:w-64">
-        <label htmlFor="q" className="sr-only">
-          Search
-        </label>
-        <input
-          id="q"
-          name="q"
-          type="search"
-          defaultValue={q}
-          placeholder={placeholder}
-          className={inputClass}
-          autoComplete="off"
-        />
+    <FilterForm action={action} className="mb-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="w-full sm:w-72">
+          <label htmlFor="q" className="sr-only">
+            Search
+          </label>
+          <input
+            id="q"
+            name="q"
+            type="search"
+            defaultValue={q}
+            placeholder={placeholder}
+            className={inputClass}
+            autoComplete="off"
+          />
+        </div>
+        {reset ? (
+          <Link href={action} className={buttonClass('ghost', 'sm')}>
+            Clear filters
+          </Link>
+        ) : null}
       </div>
-      {children}
-      <button type="submit" className={buttonClass('secondary')}>
-        Apply
-      </button>
-      {reset ? (
-        <Link href={action} className={buttonClass('ghost')}>
-          Clear
-        </Link>
+      {children ? (
+        <details className="group mt-2" open={reset}>
+          <summary
+            className={cn(
+              buttonClass('secondary', 'sm'),
+              'w-fit cursor-pointer list-none select-none [&::-webkit-details-marker]:hidden',
+            )}
+          >
+            <span className="group-open:hidden">Filters</span>
+            <span className="hidden group-open:inline">Hide filters</span>
+          </summary>
+          <div className="mt-2 flex flex-wrap items-end gap-2">
+            {children}
+            <button type="submit" className={buttonClass('secondary')}>
+              Apply
+            </button>
+          </div>
+        </details>
       ) : null}
     </FilterForm>
   );

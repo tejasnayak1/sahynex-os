@@ -8,7 +8,10 @@ test('search applies as you type, with the filter kept in the URL', async ({ pag
   await page.getByRole('searchbox', { name: 'Search' }).fill(firstName);
   await expect(page).toHaveURL(new RegExp(`[?&]q=${encodeURIComponent(firstName)}`));
   await expect(page.locator('tbody tr').first()).toContainText(firstName);
-  // Dropdown filters apply immediately too.
+  // Other filters sit behind the Filters toggle (open automatically once a filter is active).
+  await page.getByText('Hide filters').waitFor({ state: 'attached' });
+  if (!(await page.getByRole('combobox', { name: 'Stage' }).isVisible()))
+    await page.getByText('Filters', { exact: true }).click();
   await page.getByRole('combobox', { name: 'Stage' }).selectOption('new');
   await expect(page).toHaveURL(/stage=new/);
 });
@@ -55,4 +58,21 @@ test('schedule a discovery meeting from a deal and download the calendar invite'
   const anon = await page.context().browser()!.newContext({ baseURL: 'http://localhost:3100' });
   expect((await anon.request.get(href!)).status()).toBe(401);
   await anon.close();
+});
+
+test('Home briefing: sample brief, schedule, inbox and Instagram; executive dashboard unchanged', async ({
+  page,
+}) => {
+  await login(page, 'ceo@demo.sahynex.local');
+  await expect(page).toHaveURL(/\/home$/);
+  await page.getByRole('button', { name: /Write today’s brief/ }).click();
+  await expect(page.getByRole('heading', { name: 'Do these first' })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText('Sample — written by rules, not AI')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Today’s schedule' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'LinkedIn messages' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Instagram today' })).toBeVisible();
+  await expect(page.getByText('Sample data').first()).toBeVisible();
+  await page.getByRole('link', { name: 'Executive dashboard' }).first().click();
+  await expect(page.getByRole('heading', { name: 'Executive dashboard' })).toBeVisible();
+  await expect(page.getByText('Campaign efficiency')).toBeVisible();
 });

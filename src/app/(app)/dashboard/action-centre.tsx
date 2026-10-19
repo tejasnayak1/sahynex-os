@@ -17,7 +17,16 @@ const RAIL = { 3: 'bg-bad', 2: 'bg-warn', 1: 'bg-line-strong' } as const;
 const LABEL = { 3: 'Needs a decision', 2: 'Overdue', 1: 'Coming up' } as const;
 
 /** Ranked queue of what needs attention, across every module the viewer can see. */
-export function ActionCentre({ data, currency }: { data: Data; currency: string }) {
+export function ActionCentre({
+  data,
+  currency,
+  max = 14,
+}: {
+  data: Data;
+  currency: string;
+  /** How many items to show before folding the rest under “Show N more”. */
+  max?: number;
+}) {
   const items: Item[] = [
     ...data.handoverQueue.map((h) => ({
       key: `h${h.dealId}`,
@@ -91,11 +100,12 @@ export function ActionCentre({ data, currency }: { data: Data; currency: string 
         here.
       </p>
     );
-  const shown = items.slice(0, 14);
-  return (
+  const all = items.slice(0, 30);
+  const renderList = (list: Item[], offset: number) => (
     <ol className="divide-y divide-line">
-      {shown.map((i, idx) => {
-        const header = idx === 0 || shown[idx - 1].severity !== i.severity;
+      {list.map((i, idx) => {
+        const prev = idx === 0 ? all[offset - 1] : list[idx - 1];
+        const header = !prev || prev.severity !== i.severity;
         return (
           <li key={i.key}>
             {header ? (
@@ -117,5 +127,21 @@ export function ActionCentre({ data, currency }: { data: Data; currency: string 
         );
       })}
     </ol>
+  );
+  const first = all.slice(0, max);
+  const rest = all.slice(max);
+  return (
+    <>
+      {renderList(first, 0)}
+      {rest.length ? (
+        <details className="group border-t border-line">
+          <summary className="cursor-pointer list-none px-4 py-2.5 text-[13px] font-medium text-accent hover:bg-surface-2 [&::-webkit-details-marker]:hidden">
+            <span className="group-open:hidden">Show {rest.length} more</span>
+            <span className="hidden group-open:inline">Show fewer</span>
+          </summary>
+          {renderList(rest, first.length)}
+        </details>
+      ) : null}
+    </>
   );
 }

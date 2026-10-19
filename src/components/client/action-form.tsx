@@ -63,8 +63,10 @@ export function ActionForm({
         Submitting through onSubmit (instead of <form action>) keeps what the person typed when the
         server rejects the input — React would otherwise reset the form after every action.
       */}
+        {/* method="post": if JavaScript has not loaded yet, a submit must never put fields in the URL. */}
         <form
           ref={ref}
+          method="post"
           className={className}
           id={id}
           aria-busy={pending}
