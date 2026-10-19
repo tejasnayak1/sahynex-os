@@ -1,0 +1,9 @@
+.git
+node_modules
+.next
+storage
+test-results
+playwright-report
+.env
+.env.*
+!.env.example

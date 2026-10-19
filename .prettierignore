@@ -1,0 +1,8 @@
+.next
+node_modules
+drizzle
+storage
+playwright-report
+test-results
+AGENTS.md
+CLAUDE.md

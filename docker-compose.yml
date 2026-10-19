@@ -1,0 +1,32 @@
+# Reference topology: Postgres + web + worker. Not verified in the original build environment.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: sahynex
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: sahynex
+    volumes: [pgdata:/var/lib/postgresql/data]
+    healthcheck: { test: ['CMD-SHELL', 'pg_isready -U sahynex'], interval: 5s, retries: 10 }
+  migrate:
+    build: .
+    command: ['npx', 'tsx', 'src/db/migrate.ts']
+    env_file: .env.production
+    depends_on: { db: { condition: service_healthy } }
+  web:
+    build: .
+    env_file: .env.production
+    ports: ['3000:3000']
+    volumes: [storage:/var/lib/sahynex/storage]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: unless-stopped
+  worker:
+    build: .
+    command: ['npx', 'tsx', 'src/worker/index.ts']
+    env_file: .env.production
+    volumes: [storage:/var/lib/sahynex/storage]
+    depends_on: { migrate: { condition: service_completed_successfully } }
+    restart: unless-stopped
+volumes:
+  pgdata: {}
+  storage: {}
