@@ -170,6 +170,9 @@ export const integrationProvider = pgEnum('integration_provider', [
   'email_smtp',
   'whatsapp',
   'n8n',
+  'google_workspace',
+  'instagram',
+  'ai_assistant',
 ]);
 export const integrationMode = pgEnum('integration_mode', ['disconnected', 'demo', 'live']);
 export const integrationStatus = pgEnum('integration_status', [
@@ -1459,6 +1462,86 @@ export const integrationConnections = pgTable(
     ...timestamps,
   },
   (t) => [uniqueIndex('integrations_org_provider').on(t.orgId, t.provider)],
+);
+
+/* ------------------------------------------------- personal briefing */
+
+/**
+ * A person's own Google connection (Gmail + Calendar, read-only), used only for their Home page.
+ * The refresh token is encrypted at rest (AES-256-GCM, see server/crypto.ts) and never sent to
+ * the browser. One connection per user; disconnecting deletes the row.
+ */
+export const userGoogleConnections = pgTable('user_google_connections', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  orgId: uuid('org_id')
+    .notNull()
+    .references(() => organisations.id),
+  googleEmail: text('google_email'),
+  refreshTokenEnc: text('refresh_token_enc').notNull(),
+  scopes: text('scopes').notNull(),
+  lastSyncAt: ts('last_sync_at'),
+  lastError: text('last_error'),
+  ...timestamps,
+});
+
+/** One row per Instagram account per day, so the Home page can show day-over-day change. */
+export const instagramSnapshots = pgTable(
+  'instagram_snapshots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organisations.id),
+    igUserId: text('ig_user_id').notNull(),
+    username: text('username'),
+    date: date('date').notNull(),
+    followers: integer('followers'),
+    mediaCount: integer('media_count'),
+    /** Recent posts with platform-reported likes/comments at snapshot time. */
+    recentMedia: jsonb('recent_media')
+      .$type<
+        Array<{
+          id: string;
+          caption: string | null;
+          timestamp: string;
+          likes: number | null;
+          comments: number | null;
+          permalink: string | null;
+          type: string | null;
+        }>
+      >()
+      .notNull()
+      .default([]),
+    isDemo: boolean('is_demo').notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex('instagram_snapshots_day').on(t.orgId, t.igUserId, t.date)],
+);
+
+/**
+ * The AI-written daily brief, generated at most once per person per day (or on request) and
+ * cached. `facts` keeps exactly what the model was given, so every statement can be traced.
+ */
+export const aiBriefs = pgTable(
+  'ai_briefs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    orgId: uuid('org_id')
+      .notNull()
+      .references(() => organisations.id),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    date: date('date').notNull(),
+    content: jsonb('content').$type<Record<string, unknown>>().notNull(),
+    facts: jsonb('facts').$type<Record<string, unknown>>().notNull(),
+    model: text('model').notNull(),
+    isDemo: boolean('is_demo').notNull().default(false),
+    ...timestamps,
+  },
+  (t) => [uniqueIndex('ai_briefs_user_day').on(t.userId, t.date)],
 );
 
 /* ----------------------------------------------------------- finance */

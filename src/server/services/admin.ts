@@ -12,6 +12,8 @@ import { forbidden, invalid, notFound, precondition } from '../errors';
 import { ADS_ADAPTERS, ga4Adapter } from '../integrations/adapters';
 import type { Connection } from '../integrations/types';
 import { parseTemplates, whatsappAdapter } from '../integrations/whatsapp';
+import { instagramAdapter } from '../integrations/instagram';
+import { aiAdapter } from '../integrations/ai';
 import { bool, optUuid, parse, reqStr } from '../validation';
 
 const {
@@ -386,6 +388,27 @@ export const INTEGRATION_CATALOG: Array<{
     supportsDemo: true,
   },
   {
+    provider: 'google_workspace',
+    label: 'Google — Gmail & Calendar (personal Home page)',
+    description:
+      'Lets each person connect their own Google account (read-only) so Home shows their inbox highlights, LinkedIn message alerts and today’s calendar. Never sends, deletes or changes anything.',
+    supportsDemo: true,
+  },
+  {
+    provider: 'instagram',
+    label: 'Instagram',
+    description:
+      'Daily follower count, posts and engagement for your Instagram professional account on the Home page (Instagram Graph API).',
+    supportsDemo: true,
+  },
+  {
+    provider: 'ai_assistant',
+    label: 'AI assistant (daily brief)',
+    description:
+      'Writes each person’s morning brief — priorities, marketing ideas, social insights and trends — from the app’s own figures (Anthropic API).',
+    supportsDemo: true,
+  },
+  {
     provider: 'n8n',
     label: 'n8n / Make (outbound webhooks)',
     description:
@@ -438,6 +461,23 @@ export async function listIntegrations(actor: Actor) {
       setupSteps = whatsappAdapter.setupSteps;
       requiredConfig = whatsappAdapter.requiredConfig;
       missing = whatsappAdapter.checkConfig(conn ?? ({ config: {} } as Connection)).missing;
+    } else if (c.provider === 'google_workspace') {
+      setupSteps = [
+        'In Google Cloud Console, create (or reuse) an OAuth client of type “Web application”.',
+        `Add the authorised redirect URI: ${process.env.APP_URL ?? 'https://<your-domain>'}/api/google/callback`,
+        'Enable the Gmail API and Google Calendar API. On the OAuth consent screen choose “Internal” if you use Google Workspace (no verification needed); otherwise add each teammate as a test user.',
+        'Set GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET and APP_URL in the server environment, choose Live, then each person clicks “Connect Google” on their Home page.',
+      ];
+      missing = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'APP_URL'].filter(
+        (k) => !process.env[k],
+      );
+    } else if (c.provider === 'instagram') {
+      setupSteps = instagramAdapter.setupSteps;
+      requiredConfig = instagramAdapter.requiredConfig;
+      missing = instagramAdapter.checkConfig(conn ?? { config: {} }).missing;
+    } else if (c.provider === 'ai_assistant') {
+      setupSteps = aiAdapter.setupSteps;
+      missing = aiAdapter.checkConfig().missing;
     } else if (c.provider === 'email_smtp') {
       setupSteps = [
         'Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, SMTP_FROM (and SMTP_SECURE=true for port 465).',
@@ -550,6 +590,23 @@ export async function testIntegration(actor: Actor, provider: Connection['provid
       result = cfg.ok
         ? await whatsappAdapter.healthCheck(conn)
         : { ok: false, message: `Missing: ${cfg.missing.join(', ')}` };
+    } else if (provider === 'instagram') {
+      const cfg = instagramAdapter.checkConfig(conn);
+      result = cfg.ok
+        ? await instagramAdapter.healthCheck(conn)
+        : { ok: false, message: `Missing: ${cfg.missing.join(', ')}` };
+    } else if (provider === 'ai_assistant') {
+      const cfg = aiAdapter.checkConfig();
+      result = cfg.ok
+        ? { ok: true, message: 'API key present. Generate a brief from Home to confirm it works end to end.' }
+        : { ok: false, message: `Missing: ${cfg.missing.join(', ')}` };
+    } else if (provider === 'google_workspace') {
+      const missing = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'APP_URL'].filter(
+        (k) => !process.env[k],
+      );
+      result = missing.length
+        ? { ok: false, message: `Missing: ${missing.join(', ')}` }
+        : { ok: true, message: 'OAuth client configured. Each person connects their own account from Home.' };
     } else if (provider === 'email_smtp') {
       const { mailConfigured } = await import('../mailer');
       result = mailConfigured()

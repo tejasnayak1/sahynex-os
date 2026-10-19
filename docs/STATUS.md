@@ -97,3 +97,11 @@ Re-verified the existing build from a clean database before changing anything (a
 - **List pages**: only search is always visible; other filters sit behind **Filters** (opens automatically when a filter is active). Bulk-action bars appear only after rows are ticked. The leads table has five columns (interest moved under the name).
 - Fixed a test that used UTC dates and failed between 00:00 and 05:30 IST.
 - Verified: typecheck, lint, format, 119/119 unit+integration, production build, 14/14 e2e (including accessibility on the new Home page).
+
+## Session 4 (20 Oct 2026) — daily briefing Home page
+
+- **Executive dashboard restored** exactly as before (layout, title, menu label); only the landing page changed.
+- **New Home page** for everyone: greeting with a one-line summary of the day and the next thing on the calendar, today's task progress ring, an **AI morning brief** (summary, priorities, ideas, social insights, trends — labelled as suggestions), today's schedule (Google Calendar + meetings booked in Sahynex OS), tasks with progress and one-click Done, calls to make (tap to call), inbox highlights, LinkedIn messages (from LinkedIn's email alerts — LinkedIn offers no API for reading messages) and Instagram today (followers and change, posts in 24h, engagement, best recent post).
+- **New integrations** (Settings → Integrations, each with Demo mode): Google Gmail & Calendar (per-person OAuth, read-only, refresh tokens encrypted with AES-256-GCM), Instagram Graph API (daily snapshots), AI assistant (Anthropic Messages API; one brief per person per day, refresh on request, max 6/day; facts sent are stored with the brief). None verified against live accounts in the build environment.
+- Migration `0003_personal_briefing` (enum values + `user_google_connections`, `instagram_snapshots`, `ai_briefs`).
+- Verified: typecheck, lint, format, 136/136 unit+integration (17 new), production build, 15/15 e2e including accessibility on Home.

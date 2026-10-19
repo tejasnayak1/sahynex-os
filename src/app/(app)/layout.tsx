@@ -21,7 +21,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       ? { href: '/dashboard', label: 'Shared with me', icon: 'Gauge' }
       : { href: '/home', label: 'Home', icon: 'House' },
     ...(can(actor, 'dashboard.executive') && !actor.clientId
-      ? [{ href: '/dashboard', label: 'Business dashboard', icon: 'Gauge' as const }]
+      ? [{ href: '/dashboard', label: 'Executive dashboard', icon: 'Gauge' as const }]
       : []),
     ...(canAny(actor, 'leads.read.all', 'leads.read.own')
       ? [{ href: '/leads', label: 'CRM & leads', icon: 'Users' as const }]
