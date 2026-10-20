@@ -4,6 +4,7 @@
 
 :root {
   --canvas: #f4f6f8;
+  --sidebar: #ffffff;
   --surface: #ffffff;
   --surface-2: #f8fafb;
   --ink: #17202b;
@@ -30,34 +31,36 @@
 }
 
 :root[data-theme='dark'] {
-  --canvas: #111821;
-  --surface: #18212c;
-  --surface-2: #1d2733;
-  --ink: #e7ecf1;
-  --ink-2: #c9d1da;
-  --muted: #9aa6b3;
-  --faint: #8d99a6;
-  --line: #2a3542;
-  --line-strong: #364352;
-  --accent: #4fb3b8;
-  --accent-ink: #0b1a1c;
-  --accent-soft: #173538;
-  --ok: #5cc28a;
-  --ok-soft: #173426;
-  --warn: #e0ae57;
-  --warn-soft: #3a2d14;
-  --bad: #f08a80;
-  --bad-soft: #40201d;
-  --info: #8ab2ec;
-  --info-soft: #1b2b44;
-  --demo: #b9a0e6;
-  --demo-soft: #2c2340;
-  --focus: #4fb3b8;
+  --canvas: #0a131c;
+  --sidebar: #0c1620;
+  --surface: #111c27;
+  --surface-2: #162331;
+  --ink: #eaf0f5;
+  --ink-2: #c6d0da;
+  --muted: #94a3b2;
+  --faint: #8494a4;
+  --line: #1f2d3b;
+  --line-strong: #2c3c4d;
+  --accent: #3fc1c9;
+  --accent-ink: #062024;
+  --accent-soft: #10343b;
+  --ok: #4fd08f;
+  --ok-soft: #12321f;
+  --warn: #f0b860;
+  --warn-soft: #3a2c12;
+  --bad: #ff7b72;
+  --bad-soft: #3d1a1a;
+  --info: #7fb2ff;
+  --info-soft: #172a46;
+  --demo: #c2a6ff;
+  --demo-soft: #2a2140;
+  --focus: #3fc1c9;
   color-scheme: dark;
 }
 
 @theme inline {
   --color-canvas: var(--canvas);
+  --color-sidebar: var(--sidebar);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
   --color-ink: var(--ink);
@@ -139,5 +142,71 @@ dialog::backdrop {
 @keyframes shimmer {
   to {
     background-position: -200% 0;
+  }
+}
+
+/* Task board: drag, settle and celebration effects (all shortened by the reduced-motion rule). */
+.sx-burst {
+  position: fixed;
+  z-index: 90;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+.sx-spark,
+.sx-confetti {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+.sx-spark {
+  width: 5px;
+  height: 5px;
+  margin: -2.5px;
+  border-radius: 9999px;
+  animation: sx-spark 560ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+.sx-confetti {
+  width: 7px;
+  height: 11px;
+  margin: -5px -3px;
+  border-radius: 2px;
+  animation: sx-confetti 1250ms cubic-bezier(0.2, 0.7, 0.4, 1) forwards;
+}
+@keyframes sx-spark {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translate(var(--dx), var(--dy)) scale(0.4);
+  }
+}
+@keyframes sx-confetti {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0);
+  }
+  55% {
+    opacity: 1;
+    transform: translate(var(--dx), var(--dy)) rotate(calc(var(--rot) * 0.6));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(var(--dx) * 1.1), calc(var(--dy) + 140px)) rotate(var(--rot));
+  }
+}
+.sx-settle {
+  animation: sx-settle 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes sx-settle {
+  from {
+    transform: scale(0.96);
+    box-shadow: 0 0 0 2px var(--accent);
+  }
+  to {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 transparent;
   }
 }

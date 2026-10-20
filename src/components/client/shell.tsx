@@ -18,7 +18,6 @@ import {
   ListChecks,
   Megaphone,
   Menu,
-  Plus,
   Search,
   Settings,
   Target,
@@ -28,11 +27,13 @@ import {
   Moon,
   Sun,
   LogOut,
+  ChevronDown,
   KeyRound,
 } from 'lucide-react';
 import { cn } from '../ui';
 
 const ICONS = {
+  Search,
   Gauge,
   House,
   Users,
@@ -51,6 +52,9 @@ const ICONS = {
   Target,
 };
 export type NavItem = { href: string; label: string; icon: keyof typeof ICONS; badge?: number };
+
+/** Opens the search palette from anywhere (e.g. the sidebar). */
+export const openSearch = () => window.dispatchEvent(new Event('sx:open-search'));
 
 const localListeners = new Set<() => void>();
 /** Per-viewer UI preference in localStorage (falls back to the default if storage is unavailable). */
@@ -85,14 +89,12 @@ export function AppShell({
   nav,
   user,
   unread,
-  quickCreate,
   children,
   orgName,
 }: {
   nav: NavItem[];
-  user: { name: string; role: string };
+  user: { name: string; role: string; title?: string | null };
   unread: number;
-  quickCreate: Array<{ href: string; label: string }>;
   children: ReactNode;
   orgName: string;
 }) {
@@ -110,25 +112,34 @@ export function AppShell({
 
   const sidebar = (
     <nav aria-label="Main" className="flex h-full flex-col">
-      <div
-        className={cn(
-          'flex h-14 items-center gap-2 border-b border-line px-3',
-          collapsed && 'lg:justify-center lg:px-0',
-        )}
-      >
+      <div className={cn('flex h-16 items-center gap-2.5 px-5', collapsed && 'lg:justify-center lg:px-0')}>
+        <BrandMark className="h-8 w-[22px] shrink-0" />
         <span
-          aria-hidden
-          className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-accent text-[13px] font-bold text-accent-ink"
+          className={cn('truncate text-[18px] font-semibold tracking-[-0.01em]', collapsed && 'lg:hidden')}
         >
-          S
-        </span>
-        <span className={cn('truncate font-semibold tracking-[-0.01em]', collapsed && 'lg:hidden')}>
-          Sahynex <span className="font-normal text-muted">OS</span>
+          Sahynex OS
         </span>
       </div>
-      <ul className="flex-1 space-y-0.5 overflow-y-auto p-2">
+      <ul className="flex-1 space-y-1 overflow-y-auto px-3 py-2">
         {nav.map((n) => {
           const Icon = ICONS[n.icon];
+          if (n.href === '#search')
+            return (
+              <li key={n.href}>
+                <button
+                  type="button"
+                  onClick={openSearch}
+                  title={collapsed ? n.label : undefined}
+                  className={cn(
+                    'flex h-10 w-full items-center gap-3 rounded-lg px-3 text-left text-[14.5px] font-medium text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink',
+                    collapsed && 'lg:justify-center lg:px-0',
+                  )}
+                >
+                  <Icon size={19} strokeWidth={1.7} aria-hidden className="shrink-0" />
+                  <span className={cn('flex-1 truncate', collapsed && 'lg:sr-only')}>{n.label}</span>
+                </button>
+              </li>
+            );
           return (
             <li key={n.href}>
               <Link
@@ -136,12 +147,12 @@ export function AppShell({
                 title={collapsed ? n.label : undefined}
                 aria-current={active(n.href) ? 'page' : undefined}
                 className={cn(
-                  'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-[13.5px] font-medium text-ink-2 hover:bg-surface-2 hover:text-ink',
-                  active(n.href) && 'bg-accent-soft text-accent hover:bg-accent-soft hover:text-accent',
+                  'flex h-10 items-center gap-3 rounded-lg px-3 text-[14.5px] font-medium text-ink-2 transition-colors hover:bg-surface-2 hover:text-ink',
+                  active(n.href) && 'bg-accent-soft text-ink hover:bg-accent-soft [&>svg]:text-accent',
                   collapsed && 'lg:justify-center lg:px-0',
                 )}
               >
-                <Icon size={17} strokeWidth={1.9} aria-hidden className="shrink-0" />
+                <Icon size={19} strokeWidth={1.7} aria-hidden className="shrink-0" />
                 <span className={cn('flex-1 truncate', collapsed && 'lg:sr-only')}>{n.label}</span>
                 {n.badge ? (
                   <span
@@ -181,8 +192,8 @@ export function AppShell({
     <div className="flex min-h-dvh">
       <aside
         className={cn(
-          'sticky top-0 hidden h-dvh shrink-0 border-r border-line bg-surface lg:block',
-          collapsed ? 'w-[64px]' : 'w-[232px]',
+          'sticky top-0 hidden h-dvh shrink-0 border-r border-line bg-sidebar lg:block',
+          collapsed ? 'w-[68px]' : 'w-[248px]',
         )}
       >
         {sidebar}
@@ -195,13 +206,13 @@ export function AppShell({
             className="absolute inset-0 bg-black/40"
             onClick={() => setMobileOpen(false)}
           />
-          <aside className="absolute inset-y-0 left-0 w-[264px] border-r border-line bg-surface">
+          <aside className="absolute inset-y-0 left-0 w-[264px] border-r border-line bg-sidebar">
             {sidebar}
           </aside>
         </div>
       ) : null}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="app-topbar sticky top-0 z-30 flex h-14 items-center gap-2 border-b border-line bg-surface/95 px-3 backdrop-blur sm:px-5">
+        <header className="app-topbar sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-canvas/90 px-3 backdrop-blur sm:px-6">
           <button
             type="button"
             className="grid h-9 w-9 place-items-center rounded-md hover:bg-surface-2 lg:hidden"
@@ -210,29 +221,49 @@ export function AppShell({
           >
             <Menu size={18} />
           </button>
-          <span className="hidden truncate text-[13px] text-muted md:block">{orgName}</span>
-          <div className="flex-1" />
-          <CommandPalette />
-          <QuickCreate items={quickCreate} />
+          <div className="flex min-w-0 flex-1 justify-center">
+            <CommandPalette />
+          </div>
           <Link
             href="/notifications"
-            className="relative grid h-9 w-9 place-items-center rounded-md hover:bg-surface-2"
+            className="relative grid h-10 w-10 place-items-center rounded-full text-ink-2 hover:bg-surface-2"
             aria-label={`Notifications${unread ? `, ${unread} unread` : ''}`}
           >
-            <Bell size={18} />
+            <Bell size={20} strokeWidth={1.7} />
             {unread ? (
-              <span className="absolute right-1 top-1 min-w-4 rounded-full bg-bad px-1 text-center text-[10px] leading-4 text-white tabular">
-                {unread > 99 ? '99+' : unread}
-              </span>
+              <span
+                aria-hidden
+                className="absolute top-2 right-2.5 h-2 w-2 rounded-full bg-bad ring-2 ring-canvas"
+              />
             ) : null}
           </Link>
-          <UserMenu user={user} />
+          <UserMenu user={user} orgName={orgName} />
         </header>
-        <main id="main" className="mx-auto w-full max-w-[1440px] flex-1 px-3 py-5 sm:px-6">
+        <main id="main" className="mx-auto w-full max-w-[1520px] flex-1 px-3 py-6 sm:px-7">
           {children}
         </main>
       </div>
     </div>
+  );
+}
+
+/** The Sahynex mark: a brighter rendering on dark surfaces, the original on light ones. */
+export function BrandMark({ className }: { className?: string }) {
+  return (
+    <span className={cn('relative inline-block', className)} aria-hidden>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/brand/logo-mark-on-dark.png"
+        alt=""
+        className="absolute inset-0 hidden h-full w-full object-contain dark:block"
+      />
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src="/brand/logo-mark.png"
+        alt=""
+        className="absolute inset-0 h-full w-full object-contain dark:hidden"
+      />
+    </span>
   );
 }
 
@@ -253,45 +284,13 @@ function useClickAway(ref: React.RefObject<HTMLElement | null>, onAway: () => vo
   }, [ref, onAway]);
 }
 
-function QuickCreate({ items }: { items: Array<{ href: string; label: string }> }) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-  useClickAway(ref, () => setOpen(false));
-  if (!items.length) return null;
-  return (
-    <div ref={ref} className="relative">
-      <button
-        type="button"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        className="inline-flex h-9 items-center gap-1.5 rounded-md bg-accent px-3 text-[13.5px] font-medium text-accent-ink hover:brightness-110"
-      >
-        <Plus size={16} aria-hidden /> <span className="hidden sm:inline">New</span>
-      </button>
-      {open ? (
-        <div
-          role="menu"
-          className="absolute right-0 mt-1.5 w-52 rounded-md border border-line bg-surface p-1 shadow-[0_10px_30px_rgb(10_20_30/0.14)]"
-        >
-          {items.map((i) => (
-            <Link
-              key={i.href}
-              role="menuitem"
-              href={i.href}
-              onClick={() => setOpen(false)}
-              className="block rounded px-2.5 py-1.5 text-[13.5px] hover:bg-surface-2"
-            >
-              {i.label}
-            </Link>
-          ))}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function UserMenu({ user }: { user: { name: string; role: string } }) {
+function UserMenu({
+  user,
+  orgName,
+}: {
+  user: { name: string; role: string; title?: string | null };
+  orgName: string;
+}) {
   const [open, setOpen] = useState(false);
   // Only read inside the open menu (client-side), so this lazy read cannot cause a hydration mismatch.
   const [dark, setDark] = useState(
@@ -323,9 +322,20 @@ function UserMenu({ user }: { user: { name: string; role: string } }) {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="Account menu"
-        className="grid h-9 w-9 place-items-center rounded-full border border-line bg-surface-2 text-[12px] font-semibold text-ink-2"
+        className="flex items-center gap-2.5 rounded-full py-1 pr-2 pl-1 hover:bg-surface-2"
       >
-        {initials}
+        <span className="grid h-10 w-10 place-items-center rounded-full bg-gradient-to-br from-accent to-[#2b6f8f] text-[13px] font-semibold text-white ring-2 ring-surface">
+          {initials}
+        </span>
+        <span className="hidden min-w-0 text-left leading-tight md:block">
+          <span className="block max-w-[160px] truncate text-[14px] font-semibold text-ink">
+            {user.name.replace(/\s*\(.*\)\s*/, '')}
+          </span>
+          <span className="block max-w-[160px] truncate text-[12.5px] text-muted">
+            {user.title || user.role.split('/')[0].trim()}
+          </span>
+        </span>
+        <ChevronDown size={16} aria-hidden className="hidden text-muted md:block" />
       </button>
       {open ? (
         <div
@@ -335,6 +345,7 @@ function UserMenu({ user }: { user: { name: string; role: string } }) {
           <div className="border-b border-line px-2.5 py-2">
             <p className="truncate font-medium">{user.name}</p>
             <p className="truncate text-[12.5px] text-muted">{user.role}</p>
+            {orgName ? <p className="truncate text-[12px] text-faint">{orgName}</p> : null}
           </div>
           <button
             type="button"
@@ -395,8 +406,13 @@ function CommandPalette() {
         setHits([]);
       }
     };
+    const o = () => setOpen(true);
     window.addEventListener('keydown', k);
-    return () => window.removeEventListener('keydown', k);
+    window.addEventListener('sx:open-search', o);
+    return () => {
+      window.removeEventListener('keydown', k);
+      window.removeEventListener('sx:open-search', o);
+    };
   }, []);
   useEffect(() => {
     if (open) setTimeout(() => inputRef.current?.focus(), 10);
@@ -436,12 +452,16 @@ function CommandPalette() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex h-9 items-center gap-2 rounded-md border border-line bg-surface-2 px-2.5 text-[13px] text-muted hover:border-line-strong sm:w-64"
+        className="flex h-11 w-full max-w-[620px] items-center gap-2.5 rounded-xl border border-line bg-surface px-3.5 text-[14px] text-muted transition-colors hover:border-line-strong"
         aria-label="Search (Ctrl+K)"
       >
-        <Search size={15} aria-hidden />{' '}
-        <span className="hidden flex-1 text-left sm:inline">Search records</span>
-        <kbd className="hidden rounded border border-line px-1 text-[11px] sm:inline">Ctrl K</kbd>
+        <Search size={17} aria-hidden />{' '}
+        <span className="hidden flex-1 truncate text-left sm:inline">
+          Search leads, clients, projects, tasks…
+        </span>
+        <kbd className="hidden rounded-md border border-line bg-surface-2 px-1.5 py-0.5 text-[11.5px] sm:inline">
+          ⌘ K
+        </kbd>
       </button>
       {open ? (
         <div

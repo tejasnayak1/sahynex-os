@@ -4,7 +4,7 @@ import { requirePagePermission } from '@/server/auth/current';
 import { teamOptions } from '@/server/services/admin';
 import { CONTENT_TEMPLATES, FORMAT_LABEL } from '@/server/services/deliverables';
 import { projectOptions } from '@/server/services/projects';
-import { NewDeliverableForm } from '../forms';
+import { NewDeliverableStudio } from '../creative-studio';
 
 export const metadata = { title: 'New deliverable' };
 
@@ -25,10 +25,11 @@ export default async function NewDeliverable({
   return (
     <>
       <PageHeader
-        title="New deliverable"
+        title="Create new deliverable"
+        description="Provide a brief and let AI suggest stronger content. You stay in control of what’s created."
         crumbs={[{ label: 'Content & deliverables', href: '/content' }, { label: 'New' }]}
       />
-      <NewDeliverableForm
+      <NewDeliverableStudio
         projects={projects}
         team={team}
         templates={templates}

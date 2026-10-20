@@ -635,7 +635,9 @@ export type TaskFilters = PageParams & {
   status?: string;
   ownerId?: string;
   projectId?: string;
+  clientId?: string;
   priority?: string;
+  noDue?: boolean;
   mine?: boolean;
   overdue?: boolean;
   open?: boolean;
@@ -661,7 +663,18 @@ export async function listTasks(actor: Actor, f: TaskFilters) {
   else if (f.ownerId) conds.push(eq(tasks.ownerId, f.ownerId));
   if (f.mine && actor.kind === 'user') conds.push(eq(tasks.ownerId, actor.id));
   if (f.projectId) conds.push(eq(tasks.projectId, f.projectId));
+  if (f.clientId && z.string().uuid().safeParse(f.clientId).success)
+    conds.push(
+      or(
+        eq(tasks.clientId, f.clientId),
+        inArray(
+          tasks.projectId,
+          db.select({ id: projects.id }).from(projects).where(eq(projects.clientId, f.clientId)),
+        ),
+      ),
+    );
   if (f.overdue) conds.push(and(lt(tasks.dueAt, new Date()), inArray(tasks.status, [...OPEN_STATUSES])));
+  if (f.noDue) conds.push(isNull(tasks.dueAt));
   if (f.from) conds.push(gte(tasks.dueAt, f.from));
   if (f.to) conds.push(lt(tasks.dueAt, f.to));
   const where = and(...conds);
@@ -806,4 +819,30 @@ export async function taskCounts(actor: Actor) {
     .from(tasks)
     .where(and(taskScope(actor), actor.kind === 'user' ? eq(tasks.ownerId, actor.id) : undefined));
   return r;
+}
+
+/** Collaborators and comment counts for the board cards (only for tasks the caller already listed). */
+export async function boardCardExtras(actor: Actor, ids: string[]) {
+  if (!ids.length) return { people: new Map<string, string[]>(), comments: new Map<string, number>() };
+  const [collab, counts] = await Promise.all([
+    db
+      .select({ taskId: taskCollaborators.taskId, name: users.name })
+      .from(taskCollaborators)
+      .innerJoin(users, eq(users.id, taskCollaborators.userId))
+      .where(inArray(taskCollaborators.taskId, ids)),
+    db
+      .select({ id: schema.comments.entityId, n: sql<number>`count(*)::int` })
+      .from(schema.comments)
+      .where(
+        and(
+          eq(schema.comments.orgId, actor.orgId),
+          eq(schema.comments.entityType, 'task'),
+          inArray(schema.comments.entityId, ids),
+        ),
+      )
+      .groupBy(schema.comments.entityId),
+  ]);
+  const people = new Map<string, string[]>();
+  for (const c of collab) people.set(c.taskId, [...(people.get(c.taskId) ?? []), c.name]);
+  return { people, comments: new Map(counts.map((c) => [c.id, c.n])) };
 }

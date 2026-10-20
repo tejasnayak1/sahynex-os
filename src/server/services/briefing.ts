@@ -7,6 +7,7 @@ import { audit } from '../audit';
 import { decryptSecret, encryptSecret } from '../crypto';
 import { forbidden, precondition } from '../errors';
 import { aiAdapter, demoBrief, generateBriefWithAI, type BriefContent } from '../integrations/ai';
+import { fetchMarketNews } from '../integrations/news-feeds';
 import {
   accessTokenFor,
   fetchCalendar,
@@ -279,6 +280,10 @@ export type InstagramBlock =
       recent: IgSnapshot['recentMedia'];
       top: IgSnapshot['recentMedia'][number] | null;
       engagementRecent: number | null;
+      monthPosts: number;
+      monthPostsCapped: boolean;
+      recentLikes: number | null;
+      prevFollowers: number | null;
       snapshotDate: string;
     };
 
@@ -380,6 +385,12 @@ export async function instagramBlock(actor: Actor): Promise<InstagramBlock> {
     mediaCount: todays.mediaCount,
     postsLast24h: recent.filter((m) => Date.parse(m.timestamp) >= dayAgo).length,
     recent: recent.slice(0, 4),
+    // Counted from the latest 12 posts Instagram returns, so "12+" means at least that many.
+    monthPosts: recent.filter((m) => m.timestamp.slice(0, 7) === today.slice(0, 7)).length,
+    monthPostsCapped:
+      recent.length >= 12 && recent.every((m) => m.timestamp.slice(0, 7) === today.slice(0, 7)),
+    recentLikes: known.length ? known.reduce((s, m) => s + (m.likes ?? 0), 0) : null,
+    prevFollowers: prev?.followers ?? null,
     top,
     engagementRecent: known.length
       ? Math.round(known.reduce((s, m) => s + (m.likes ?? 0) + (m.comments ?? 0), 0) / known.length)
@@ -406,6 +417,7 @@ export async function callsAndProgress(actor: Actor) {
             nextAction: leads.nextAction,
             nextActionAt: leads.nextActionAt,
             organisationName: leads.organisationName,
+            interest: leads.interest,
           })
           .from(leads)
           .where(
@@ -472,12 +484,20 @@ export async function briefBlock(actor: Actor): Promise<BriefBlock> {
 export async function briefFacts(actor: Actor) {
   const userId = actorUserId(actor)!;
   const { org, today, start } = await dayBounds(actor.orgId);
-  const [home, ig, google, cp] = await Promise.all([
+  const [home, ig, google, cp, feed] = await Promise.all([
     homeToday(actor),
     instagramBlock(actor),
     googleBlock(actor),
     callsAndProgress(actor),
+    fetchMarketNews().catch(() => null),
   ]);
+  // Public headlines only (title, publisher, date) — lets the AI explain what real updates mean.
+  const news = (feed?.items ?? []).slice(0, 12).map((n) => ({
+    title: n.title,
+    source: n.source,
+    category: n.category,
+    published: n.published?.slice(0, 10) ?? null,
+  }));
   const yesterdayStart = new Date(start.getTime() - 86_400_000);
   const [ly] = await db
     .select({ n: sql<number>`count(*)::int` })
@@ -561,6 +581,7 @@ export async function briefFacts(actor: Actor) {
           }
         : 'not connected',
     marketingLast7Days: marketing ?? 'not available for this role',
+    industryHeadlines: news,
     _userId: userId,
   };
 }

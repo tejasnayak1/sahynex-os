@@ -23,7 +23,9 @@ export const getCurrentActor = cache(async (): Promise<UserActor | null> => {
   if (!res) return null;
   if (res.renewedExpiresAt) {
     try {
-      store.set(SESSION_COOKIE, token, cookieOptions(res.renewedExpiresAt));
+      const remember = store.get('sx_remember')?.value !== '0';
+      const opts = cookieOptions(res.renewedExpiresAt);
+      store.set(SESSION_COOKIE, token, remember ? opts : { ...opts, expires: undefined });
     } catch {
       // Cookies are read-only during Server Component render; renewal is persisted on the next action.
     }

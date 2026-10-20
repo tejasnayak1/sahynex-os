@@ -63,6 +63,61 @@ export function authUrl(state: string): string {
   return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
 }
 
+/* --------------------------------------------------- Sign in with Google */
+
+export const GOOGLE_LOGIN_COOKIE = 'sx_glogin';
+export const REMEMBER_COOKIE = 'sx_remember';
+
+/** Google sign-in only needs the person's verified email. */
+export function loginAuthUrl(state: string): string {
+  const q = new URLSearchParams({
+    client_id: env('GOOGLE_OAUTH_CLIENT_ID'),
+    redirect_uri: redirectUri(),
+    response_type: 'code',
+    scope: 'openid email',
+    prompt: 'select_account',
+    state,
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${q}`;
+}
+
+/** Exchanges a sign-in code and returns the verified email, or null if Google hasn't verified it. */
+export async function exchangeLoginCode(code: string): Promise<string | null> {
+  const body = (await apiFetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      code,
+      client_id: env('GOOGLE_OAUTH_CLIENT_ID'),
+      client_secret: env('GOOGLE_OAUTH_CLIENT_SECRET'),
+      redirect_uri: redirectUri(),
+      grant_type: 'authorization_code',
+    }),
+  })) as { id_token?: string };
+  return verifiedEmailFromIdToken(body.id_token);
+}
+
+/** The id_token comes straight from Google's token endpoint over TLS; we still check audience, issuer, expiry and verification. */
+export function verifiedEmailFromIdToken(idToken: string | undefined, now = Date.now()): string | null {
+  if (!idToken) return null;
+  try {
+    const p = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64url').toString()) as {
+      email?: string;
+      email_verified?: boolean | string;
+      aud?: string;
+      iss?: string;
+      exp?: number;
+    };
+    if (p.aud !== env('GOOGLE_OAUTH_CLIENT_ID')) return null;
+    if (p.iss !== 'https://accounts.google.com' && p.iss !== 'accounts.google.com') return null;
+    if (!p.exp || p.exp * 1000 < now) return null;
+    if (!(p.email_verified === true || p.email_verified === 'true')) return null;
+    return p.email?.toLowerCase() ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function exchangeCode(code: string) {
   const body = (await apiFetch('https://oauth2.googleapis.com/token', {
     method: 'POST',

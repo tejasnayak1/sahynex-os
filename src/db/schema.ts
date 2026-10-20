@@ -48,6 +48,7 @@ export const leadStage = pgEnum('lead_stage', [
   'converted',
   'lost',
 ]);
+export const budgetPeriod = pgEnum('budget_period', ['monthly', 'annual']);
 export const qualificationStatus = pgEnum('qualification_status', ['pending', 'qualified', 'disqualified']);
 export const leadType = pgEnum('lead_type', ['client_prospect', 'admission_enquiry', 'partnership', 'other']);
 export const activityType = pgEnum('activity_type', [
@@ -279,6 +280,8 @@ export const users = pgTable(
     /** Set only for external client reviewers — they are scoped to this client. */
     clientId: uuid('client_id').references((): AnyPgColumn => clients.id),
     isActive: boolean('is_active').notNull().default(true),
+    /** Shown under the person's name (e.g. "CMO"); independent of their permission role. */
+    jobTitle: text('job_title'),
     /** Eligible for automatic lead assignment (round-robin). */
     acceptsLeads: boolean('accepts_leads').notNull().default(false),
     failedLoginCount: integer('failed_login_count').notNull().default(0),
@@ -392,6 +395,11 @@ export const clients = pgTable(
     website: text('website'),
     city: text('city'),
     notes: text('notes'),
+    /** Client's own spend allocations (paise). Null = not recorded — never treated as zero. */
+    marketingBudgetMinor: money('marketing_budget_minor'),
+    marketingBudgetPeriod: budgetPeriod('marketing_budget_period'),
+    brandingBudgetMinor: money('branding_budget_minor'),
+    brandingBudgetPeriod: budgetPeriod('branding_budget_period'),
     isDemo: boolean('is_demo').notNull().default(false),
     deletedAt: ts('deleted_at'),
     ...timestamps,
@@ -1132,6 +1140,9 @@ export const deliverables = pgTable(
     channel: text('channel'),
     audience: text('audience'),
     brief: text('brief'),
+    /** What the piece is meant to achieve (e.g. generate enquiries). */
+    objective: text('objective'),
+    priority: priority('priority').notNull().default('medium'),
     ownerId: uuid('owner_id').references(() => users.id),
     status: deliverableStatus('status').notNull().default('draft'),
     currentVersion: integer('current_version').notNull().default(0),

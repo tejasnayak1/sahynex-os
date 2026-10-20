@@ -1,6 +1,12 @@
 'use server';
 import { formToObject, runAction, type ActionState } from '@/server/action';
-import { addContact, createClient, removeContact, updateClient } from '@/server/services/clients';
+import {
+  addContact,
+  createClient,
+  removeContact,
+  updateClient,
+  updateContact,
+} from '@/server/services/clients';
 
 export async function createClientAction(_: ActionState, fd: FormData) {
   return runAction(async (actor) => {
@@ -10,9 +16,9 @@ export async function createClientAction(_: ActionState, fd: FormData) {
 }
 export async function updateClientAction(_: ActionState, fd: FormData) {
   return runAction(async (actor) => {
-    const { id, ...rest } = formToObject(fd);
+    const { id, _scope, ...rest } = formToObject(fd);
     await updateClient(actor, String(id), rest);
-    return { ok: true, message: 'Client saved' };
+    return { ok: true, message: _scope === 'budgets' ? 'Budgets saved' : 'Client saved' };
   }, '/clients');
 }
 export async function addContactAction(_: ActionState, fd: FormData) {
@@ -26,5 +32,27 @@ export async function removeContactAction(_: ActionState, fd: FormData) {
   return runAction(async (actor) => {
     await removeContact(actor, String(fd.get('id')));
     return { ok: true, message: 'Contact removed' };
+  }, '/clients');
+}
+export async function updateContactAction(_: ActionState, fd: FormData) {
+  return runAction(async (actor) => {
+    const { id, ...rest } = formToObject(fd);
+    await updateContact(actor, String(id), rest);
+    return { ok: true, message: 'Contact saved' };
+  }, '/clients');
+}
+export async function addClientNoteAction(_: ActionState, fd: FormData) {
+  return runAction(async (actor) => {
+    const { clientId, ...rest } = formToObject(fd);
+    const { addClientNote } = await import('@/server/services/clients');
+    await addClientNote(actor, String(clientId), rest);
+    return { ok: true, message: 'Note added' };
+  }, '/clients');
+}
+export async function deleteClientNoteAction(_: ActionState, fd: FormData) {
+  return runAction(async (actor) => {
+    const { deleteClientNote } = await import('@/server/services/clients');
+    await deleteClientNote(actor, String(fd.get('id')));
+    return { ok: true, message: 'Note removed' };
   }, '/clients');
 }

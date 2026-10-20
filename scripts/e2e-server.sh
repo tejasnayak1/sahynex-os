@@ -8,6 +8,7 @@ export APP_URL="http://localhost:3100"
 export MONITOR_ALLOW_PRIVATE=true
 export LOGIN_RATE_LIMIT_IP=10000 LOGIN_RATE_LIMIT_EMAIL=10000
 export WORKER_TICK_MS=1000
+export MARKET_NEWS_FIXTURE="$PWD/tests/fixtures/market-news.json" # no network in tests
 export NODE_ENV=production ALLOW_DEMO_SEED=true
 DB="${DATABASE_URL##*/}"
 ADMIN="${DATABASE_URL%/*}/postgres"

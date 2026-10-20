@@ -65,9 +65,25 @@ test('Home briefing: sample brief, schedule, inbox and Instagram; executive dash
 }) => {
   await login(page, 'ceo@demo.sahynex.local');
   await expect(page).toHaveURL(/\/home$/);
+  await expect(page.getByRole('heading', { name: 'Your daily briefing' })).toBeVisible();
   await page.getByRole('button', { name: /Write today’s brief/ }).click();
-  await expect(page.getByRole('heading', { name: 'Do these first' })).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText('Sample — written by rules, not AI')).toBeVisible();
+  await expect(page.getByText('Sample · written by rules').first()).toBeVisible({ timeout: 30_000 });
+  await page.getByText('Priorities & follow-ups').click();
+  await expect(
+    page
+      .getByText('Prepare agendas for today’s meetings.')
+      .or(page.getByText(/Clear the|Use the open calendar/))
+      .first(),
+  ).toBeVisible();
+  // Marketing intelligence: real headlines (from the feed fixture) with dates; AI ideas labelled.
+  await expect(page.getByRole('heading', { name: 'Marketing intelligence' })).toBeVisible();
+  await expect(page.getByText(/FIXTURE: Google Ads adds campaign priority/)).toBeVisible();
+  await expect(page.getByText(/FIXTURE: YouTube tests new Shorts/)).toBeVisible();
+  await page.getByRole('link', { name: /View all insights/ }).click();
+  await expect(page.getByRole('heading', { name: 'Latest marketing news' })).toBeVisible();
+  await expect(page.getByRole('link', { name: /FIXTURE: Instagram expands Reels/ })).toBeVisible();
+  await expect(page.getByText('Speed-to-lead')).toBeVisible();
+  await page.goto('/home');
   await expect(page.getByRole('heading', { name: 'Today’s schedule' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'LinkedIn messages' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Instagram today' })).toBeVisible();

@@ -1,6 +1,6 @@
 import { DescList, Panel } from '@/components/ui';
 import { requireActor } from '@/server/auth/current';
-import { PasswordForm } from './form';
+import { JobTitleForm, PasswordForm } from './form';
 
 export const metadata = { title: 'My account' };
 
@@ -17,6 +17,9 @@ export default async function AccountPage() {
             ['Permissions', `${actor.permissions.size} granted`],
           ]}
         />
+        <div className="mt-4 border-t border-line pt-4">
+          <JobTitleForm value={actor.jobTitle ?? null} />
+        </div>
       </Panel>
       <Panel title="Change password">
         <PasswordForm />

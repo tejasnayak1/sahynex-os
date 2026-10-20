@@ -3,6 +3,7 @@
  *   GET /{version}/{ig-user-id}?fields=username,followers_count,media_count
  *   GET /{version}/{ig-user-id}/media?fields=id,caption,timestamp,like_count,comments_count,permalink,media_type
  *
+ * media_url / thumbnail_url give post thumbnails for Home.
  * Only stable account and media fields are used (not the insights metrics Meta keeps renaming).
  * A daily snapshot is stored so the Home page can show real day-over-day change.
  *
@@ -23,6 +24,8 @@ export type IgMedia = {
   comments: number | null;
   permalink: string | null;
   type: string | null;
+  /** Image (or video thumbnail) URL from Instagram; signed and short-lived, refreshed daily. */
+  thumb?: string | null;
 };
 export type IgSnapshot = {
   username: string | null;
@@ -63,7 +66,7 @@ export const instagramAdapter = {
         timeoutMs: 15_000,
       }) as Promise<{ username?: string; followers_count?: number; media_count?: number }>,
       apiFetch(
-        `${this.base(conn)}/media?fields=id,caption,timestamp,like_count,comments_count,permalink,media_type&limit=12&access_token=${token}`,
+        `${this.base(conn)}/media?fields=id,caption,timestamp,like_count,comments_count,permalink,media_type,media_url,thumbnail_url&limit=12&access_token=${token}`,
         { timeoutMs: 15_000 },
       ) as Promise<{
         data?: Array<{
@@ -74,6 +77,8 @@ export const instagramAdapter = {
           comments_count?: number;
           permalink?: string;
           media_type?: string;
+          media_url?: string;
+          thumbnail_url?: string;
         }>;
       }>,
     ]);
@@ -89,6 +94,7 @@ export const instagramAdapter = {
         comments: m.comments_count ?? null,
         permalink: m.permalink ?? null,
         type: m.media_type ?? null,
+        thumb: (m.media_type === 'VIDEO' ? m.thumbnail_url : m.media_url) ?? m.thumbnail_url ?? null,
       })),
     };
   },

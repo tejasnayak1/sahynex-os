@@ -1,0 +1,42 @@
+[
+  {
+    "title": "FIXTURE: Google Ads adds campaign priority and budget allocation controls",
+    "link": "https://example.com/fixture/ads-priority",
+    "source": "Google Ads & Commerce Blog",
+    "category": "news",
+    "published": "2026-10-14T15:00:00.000Z",
+    "summary": "Fixture item used by automated tests."
+  },
+  {
+    "title": "FIXTURE: Search marketers report AI Max enabled in some accounts",
+    "link": "https://example.com/fixture/ai-max",
+    "source": "Search Engine Land",
+    "category": "news",
+    "published": "2026-10-19T18:52:00.000Z",
+    "summary": null
+  },
+  {
+    "title": "FIXTURE: YouTube tests new Shorts incentives",
+    "link": "https://example.com/fixture/shorts",
+    "source": "Social Media Today",
+    "category": "platform",
+    "published": "2026-10-19T22:37:00.000Z",
+    "summary": null
+  },
+  {
+    "title": "FIXTURE: Instagram expands Reels discovery for new accounts",
+    "link": "https://example.com/fixture/reels",
+    "source": "Social Media Today",
+    "category": "platform",
+    "published": "2026-10-18T10:00:00.000Z",
+    "summary": null
+  },
+  {
+    "title": "FIXTURE: WhatsApp calls can now include anyone via a link",
+    "link": "https://example.com/fixture/wa",
+    "source": "Meta Newsroom",
+    "category": "platform",
+    "published": "2026-10-14T14:24:00.000Z",
+    "summary": null
+  }
+]

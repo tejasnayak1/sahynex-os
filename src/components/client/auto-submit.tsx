@@ -72,14 +72,16 @@ export function ActionButton({
   variant = 'secondary',
   size = 'sm',
   successMessage,
+  className,
 }: {
   action: (p: ActionState, fd: FormData) => Promise<ActionState>;
   children: React.ReactNode;
   hidden?: Record<string, string>;
   confirm?: string;
-  variant?: 'primary' | 'secondary' | 'ghost' | 'danger';
+  variant?: 'primary' | 'secondary' | 'ghost' | 'danger' | 'danger-soft';
   size?: 'sm' | 'md';
   successMessage?: string;
+  className?: string;
 }) {
   const [state, formAction, pending] = useActionState(action, null);
   const router = useRouter();
@@ -102,7 +104,20 @@ export function ActionButton({
         onClick={(e) => {
           if (confirm && !window.confirm(confirm)) e.preventDefault();
         }}
-        className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors disabled:opacity-55 ${size === 'sm' ? 'h-7 px-2.5 text-[13px]' : 'h-9 px-3.5 text-[14px]'} ${variant === 'primary' ? 'bg-accent text-accent-ink' : variant === 'danger' ? 'bg-bad text-white' : variant === 'ghost' ? 'text-ink-2 hover:bg-surface-2' : 'border border-line-strong bg-surface text-ink hover:bg-surface-2'}`}
+        className={cn(
+          'inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-md font-medium transition-colors disabled:opacity-55',
+          size === 'sm' ? 'h-7 px-2.5 text-[13px]' : 'h-9 px-3.5 text-[14px]',
+          variant === 'primary'
+            ? 'bg-accent text-accent-ink'
+            : variant === 'danger'
+              ? 'bg-bad text-white'
+              : variant === 'danger-soft'
+                ? 'border border-bad/35 bg-bad-soft text-bad hover:border-bad/60'
+                : variant === 'ghost'
+                  ? 'text-ink-2 hover:bg-surface-2'
+                  : 'border border-line-strong bg-surface text-ink hover:bg-surface-2',
+          className,
+        )}
       >
         {pending ? 'Working…' : children}
       </button>

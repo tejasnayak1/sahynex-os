@@ -25,6 +25,7 @@ import { requirePagePermission } from '@/server/auth/current';
 import { teamOptions } from '@/server/services/admin';
 import { projectOptions } from '@/server/services/projects';
 import {
+  boardCardExtras,
   BULK_STATUSES,
   listTasks,
   OPEN_STATUSES,
@@ -35,6 +36,12 @@ import {
 import { listSavedViews } from '@/server/services/views';
 import { SavedViews } from '../_shared/saved-views';
 import { bulkTaskAction, taskStatusAction, updateTaskAction } from './actions';
+import { KanbanBoard, type BoardTask } from './kanban-board';
+import { BoardFilters } from './board-filters';
+import { MoreMenu } from '@/components/client/more-menu';
+import { Plus } from 'lucide-react';
+import { clientOptions } from '@/server/services/clients';
+import { fromDateTimeLocal, todayIn } from '@/lib/format';
 
 export const metadata = { title: 'Tasks & team' };
 
@@ -89,14 +96,32 @@ export default async function TasksPage({
         description="Who is doing what, by when — and what is blocked."
         actions={
           <>
-            <LinkButton href="/reports/daily">Daily update</LinkButton>
+            <LinkButton
+              href="/reports/daily"
+              className={view === 'board' ? 'h-11 px-5 text-[15px]' : undefined}
+            >
+              Daily update
+            </LinkButton>
             {can(actor, 'tasks.write') ? (
               <LinkButton
                 href={`/tasks/new${sp.projectId ? `?projectId=${sp.projectId}` : ''}`}
                 variant="primary"
+                className={view === 'board' ? 'h-11 px-5 text-[15px]' : undefined}
               >
-                New task
+                <Plus size={17} aria-hidden /> New task
               </LinkButton>
+            ) : null}
+            {view === 'board' ? (
+              <MoreMenu
+                label="More task options"
+                className="[&>summary]:h-11 [&>summary]:w-11 [&>summary]:border [&>summary]:border-line"
+              >
+                <div className="px-1 py-1">
+                  <SavedViews module="tasks" path="/tasks" query={currentQuery} views={saved} />
+                </div>
+                <Link href="/tasks?view=calendar">Calendar view</Link>
+                <Link href="/tasks?view=list">List view</Link>
+              </MoreMenu>
             ) : null}
           </>
         }
@@ -116,9 +141,11 @@ export default async function TasksPage({
           </Link>
         ))}
       </nav>
-      <div className="mb-3">
-        <SavedViews module="tasks" path="/tasks" query={currentQuery} views={saved} />
-      </div>
+      {view !== 'board' ? (
+        <div className="mb-3">
+          <SavedViews module="tasks" path="/tasks" query={currentQuery} views={saved} />
+        </div>
+      ) : null}
     </>
   );
   const filters = (extra?: React.ReactNode) => (
@@ -234,86 +261,72 @@ export default async function TasksPage({
   }
 
   if (view === 'board') {
-    const res = await listTasks(actor, {
-      page: 1,
-      pageSize: 200,
-      dir: 'asc',
-      sort: 'dueAt',
-      q: sp.q,
-      projectId: sp.projectId,
-      ownerId: sp.ownerId,
-      from: undefined,
-    });
-    const cols = ['todo', 'in_progress', 'blocked', 'in_review', 'done'] as const;
+    const now = new Date();
+    const dayMs = 86_400_000;
+    const tz = process.env.APP_TIMEZONE ?? 'Asia/Kolkata';
+    const startToday = fromDateTimeLocal(`${todayIn(tz)}T00:00`, tz);
+    const due = sp.due;
+    const [res, clients] = await Promise.all([
+      listTasks(actor, {
+        page: 1,
+        pageSize: 200,
+        dir: 'asc',
+        sort: 'dueAt',
+        q: sp.q,
+        projectId: sp.projectId,
+        clientId: sp.clientId,
+        ownerId: sp.ownerId,
+        priority: sp.priority,
+        status: sp.status,
+        overdue: due === 'overdue',
+        noDue: due === 'none',
+        from: due === 'today' ? startToday : due === 'week' ? now : undefined,
+        to:
+          due === 'today'
+            ? new Date(startToday.getTime() + dayMs)
+            : due === 'week'
+              ? new Date(now.getTime() + 7 * dayMs)
+              : undefined,
+      }),
+      clientOptions(actor),
+    ]);
+    const rows = res.rows.filter((t) => t.status !== 'cancelled');
+    const extras = await boardCardExtras(
+      actor,
+      rows.map((t) => t.id),
+    );
+    const dueLabel = (d: Date | null) => {
+      if (!d) return 'No due date';
+      const days = Math.round((d.getTime() - startToday.getTime()) / dayMs - 0.5);
+      if (d < now && days < 0) return `Overdue ${-days}d`;
+      if (days <= 0) return 'Today';
+      if (days === 1) return 'Tomorrow';
+      return `${days} days`;
+    };
+    const boardTasks: BoardTask[] = rows.map((t) => ({
+      id: t.id,
+      title: t.title,
+      sub: t.projectName ?? t.clientName ?? t.ref,
+      dueLabel: dueLabel(t.dueAt),
+      late: !!t.dueAt && t.dueAt < now,
+      people: [
+        ...(t.ownerName ? [t.ownerName] : []),
+        ...(extras.people.get(t.id) ?? []).filter((n) => n !== t.ownerName),
+      ],
+      comments: extras.comments.get(t.id) ?? 0,
+      priority: t.priority as BoardTask['priority'],
+      completedLabel: t.completedAt ? `Completed ${relativeTime(t.completedAt)}` : null,
+      status: t.status as BoardTask['status'],
+    }));
     return (
       <>
         {header}
-        {filters()}
-        <div className="-mx-3 overflow-x-auto px-3 pb-4 sm:-mx-6 sm:px-6">
-          <div className="flex min-w-max gap-3">
-            {cols.map((c) => {
-              const items = res.rows.filter((t) => t.status === c).slice(0, c === 'done' ? 20 : 100);
-              return (
-                <section
-                  key={c}
-                  aria-label={STATUS_LABEL[c]}
-                  className="w-[268px] rounded-lg border border-line bg-surface-2"
-                >
-                  <header className="flex items-center justify-between border-b border-line px-3 py-2">
-                    <h2 className="text-[13.5px] font-semibold">{STATUS_LABEL[c]}</h2>
-                    <span className="text-[12.5px] text-muted tabular">
-                      {res.rows.filter((t) => t.status === c).length}
-                    </span>
-                  </header>
-                  <ul className="flex flex-col gap-2 p-2">
-                    {items.map((t) => {
-                      const late = t.dueAt && t.dueAt < new Date() && c !== 'done';
-                      return (
-                        <li key={t.id} className="rounded-md border border-line bg-surface p-2.5">
-                          <Link
-                            href={`/tasks/${t.id}`}
-                            className="block leading-snug text-ink hover:underline"
-                          >
-                            {t.title}
-                          </Link>
-                          <p className="mt-0.5 truncate text-[12px] text-muted">{t.projectName ?? t.ref}</p>
-                          <div className="mt-1.5 flex items-center justify-between text-[12px]">
-                            <span className={late ? 'font-medium text-bad' : 'text-muted'}>
-                              {t.dueAt ? relativeTime(t.dueAt) : 'No due date'}
-                            </span>
-                            <span className="text-muted">{t.ownerName?.split(' ')[0] ?? '—'}</span>
-                          </div>
-                          {c !== 'done' && c !== 'blocked' ? (
-                            <div className="mt-2">
-                              <InlineSelect
-                                action={taskStatusAction}
-                                name="status"
-                                value={t.status}
-                                label={`Status of ${t.title}`}
-                                hidden={{ id: t.id }}
-                                className="h-7 w-full text-[12.5px]"
-                                options={['todo', 'in_progress', 'in_review', 'done'].map((s) => ({
-                                  value: s,
-                                  label: STATUS_LABEL[s],
-                                }))}
-                              />
-                            </div>
-                          ) : null}
-                        </li>
-                      );
-                    })}
-                    {!items.length ? (
-                      <li className="px-1 py-2 text-[12.5px] text-faint">Nothing here</li>
-                    ) : null}
-                  </ul>
-                </section>
-              );
-            })}
-          </div>
-        </div>
-        <p className="text-[12.5px] text-muted">
-          Blocking a task requires a note — open the task to mark it blocked.
-        </p>
+        <BoardFilters
+          clients={clients.map((c) => ({ value: c.id, label: c.name }))}
+          projects={projects.map((p) => ({ value: p.id, label: p.name }))}
+          people={team.map((t) => ({ value: t.id, label: t.name }))}
+        />
+        <KanbanBoard tasks={boardTasks} />
       </>
     );
   }

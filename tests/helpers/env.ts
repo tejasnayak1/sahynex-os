@@ -6,3 +6,4 @@ process.env.STORAGE_DIR = process.env.TEST_STORAGE_DIR ?? '/tmp/sahynex-test-sto
 process.env.MONITOR_ALLOW_PRIVATE = 'true';
 process.env.APP_TIMEZONE = 'Asia/Kolkata';
 delete process.env.SMTP_HOST;
+process.env.MARKET_NEWS ??= 'off'; // tests never reach the network; feed parsing has its own unit tests

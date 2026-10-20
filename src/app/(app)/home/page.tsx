@@ -1,18 +1,39 @@
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { and, eq } from 'drizzle-orm';
+import {
+  ArrowRight,
+  ArrowUpRight,
+  CalendarDays,
+  Handshake,
+  IndianRupee,
+  Instagram,
+  Linkedin,
+  ListPlus,
+  Mail,
+  MapPin,
+  Phone,
+  SquareCheckBig,
+  TrendingUp,
+  UserPlus,
+  Users,
+  Video,
+} from 'lucide-react';
 import { ActionButton } from '@/components/client/auto-submit';
-import { LinkButton, cn } from '@/components/ui';
+import { cn } from '@/components/ui';
 import { db, schema } from '@/db';
-import { formatMoney, formatNumber, relativeTime, todayIn } from '@/lib/format';
+import { formatDate, formatMoney, formatNumber, relativeTime, todayIn } from '@/lib/format';
 import { can } from '@/server/actor';
 import { requireActor } from '@/server/auth/current';
 import { briefBlock, callsAndProgress, googleBlock, instagramBlock } from '@/server/services/briefing';
+import { upcomingRenewals } from '@/server/services/clients';
 import { executiveDashboard, homeToday } from '@/server/services/dashboard';
 import { approvalQueue } from '@/server/services/deliverables';
 import { getOrg } from '@/server/services/org';
-import { taskStatusAction } from '../tasks/actions';
-import { disconnectGoogleAction, generateBriefAction } from './actions';
+import { disconnectGoogleAction } from './actions';
+import { DailyBriefingCard, IntelCard, IntelCardSkeleton, type Alert } from './briefing-sections';
+import { RowMenu, TaskCheck } from './home-client';
 
 export const metadata = { title: 'Home' };
 
@@ -27,35 +48,108 @@ function greeting(tz: string) {
 
 const timeFmt = (tz: string) => (d: string | Date | null) =>
   d
-    ? new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: tz }).format(
-        new Date(d),
-      )
+    ? new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit', timeZone: tz })
+        .format(new Date(d))
+        .toUpperCase()
     : '';
 
-function Section({
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+const AVATAR_TONES = [
+  'bg-[#cdeee9] text-[#126b63]',
+  'bg-[#dcdcfb] text-[#4b4bb5]',
+  'bg-[#d6e8fb] text-[#2b5f9e]',
+  'bg-[#f7dfe9] text-[#a33a68]',
+  'bg-[#fbecd3] text-[#94600f]',
+];
+function initials(name: string) {
+  return (
+    name
+      .replace(/\(.*\)|DEMO ·/g, '')
+      .trim()
+      .split(/\s+/)
+      .map((p) => p[0])
+      .filter(Boolean)
+      .slice(0, 2)
+      .join('')
+      .toUpperCase() || '?'
+  );
+}
+function Avatar({ name, className }: { name: string; className?: string }) {
+  const tone = AVATAR_TONES[[...name].reduce((s, c) => s + c.charCodeAt(0), 0) % AVATAR_TONES.length];
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'grid h-11 w-11 shrink-0 place-items-center rounded-full text-[14px] font-semibold',
+        tone,
+        className,
+      )}
+    >
+      {initials(name)}
+    </span>
+  );
+}
+
+function Card({
+  id,
+  icon,
   title,
-  aside,
+  badge,
+  action,
   children,
   className,
 }: {
+  id?: string;
+  icon: React.ReactNode;
   title: string;
-  aside?: React.ReactNode;
+  badge?: React.ReactNode;
+  action?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
-    <section className={cn('flex min-w-0 flex-col rounded-xl border border-line bg-surface', className)}>
-      <header className="flex items-baseline justify-between gap-3 px-5 pt-4 pb-3">
-        <h2 className="text-[15px] font-semibold">{title}</h2>
-        {aside ? <div className="text-[13px] text-muted">{aside}</div> : null}
+    <section
+      id={id}
+      className={cn(
+        'flex min-w-0 scroll-mt-24 flex-col rounded-2xl border border-line bg-surface',
+        className,
+      )}
+    >
+      <header className="flex items-center gap-3 px-5 pt-4 pb-3">
+        <span className="text-accent">{icon}</span>
+        <h2 className="text-[17px] font-semibold">{title}</h2>
+        {badge}
+        <div className="ml-auto text-[14px]">{action}</div>
       </header>
-      <div className="flex-1 px-5 pb-4">{children}</div>
+      <div className="flex-1 px-3 pb-3">{children}</div>
     </section>
   );
 }
 
+function ViewAll({
+  href,
+  children = 'View all',
+  external,
+}: {
+  href: string;
+  children?: React.ReactNode;
+  external?: boolean;
+}) {
+  const cls = 'inline-flex items-center gap-1.5 font-medium text-accent hover:underline';
+  return external ? (
+    <a href={href} target="_blank" rel="noreferrer noopener" className={cls}>
+      {children} <ArrowRight size={15} aria-hidden />
+    </a>
+  ) : (
+    <Link href={href} className={cls}>
+      {children} <ArrowRight size={15} aria-hidden />
+    </Link>
+  );
+}
+
 function Quiet({ children }: { children: React.ReactNode }) {
-  return <p className="py-2 text-[14px] text-muted">{children}</p>;
+  return <p className="px-2 py-3 text-[14px] text-muted">{children}</p>;
 }
 
 function DemoTag() {
@@ -66,45 +160,19 @@ function DemoTag() {
   );
 }
 
-/** Ring showing today's task completion. */
-function ProgressRing({ done, total }: { done: number; total: number }) {
-  const pct = total ? done / total : 0;
-  const r = 26;
-  const c = 2 * Math.PI * r;
-  return (
-    <div
-      className="flex items-center gap-3"
-      role="img"
-      aria-label={total ? `${done} of ${total} tasks done today` : 'No tasks due today'}
-    >
-      <svg width="64" height="64" viewBox="0 0 64 64" aria-hidden>
-        <circle cx="32" cy="32" r={r} fill="none" stroke="var(--line)" strokeWidth="6" />
-        {total ? (
-          <circle
-            cx="32"
-            cy="32"
-            r={r}
-            fill="none"
-            stroke="var(--accent)"
-            strokeWidth="6"
-            strokeLinecap="round"
-            strokeDasharray={`${c * pct} ${c}`}
-            transform="rotate(-90 32 32)"
-          />
-        ) : null}
-        <text x="32" y="37" textAnchor="middle" className="fill-ink text-[15px] font-semibold tabular">
-          {total ? `${Math.round(pct * 100)}%` : '–'}
-        </text>
-      </svg>
-      <div className="leading-tight">
-        <p className="text-[15px] font-semibold tabular">
-          {total ? `${done} of ${total} done` : 'Nothing due'}
-        </p>
-        <p className="text-[13px] text-muted">today’s tasks</p>
-      </div>
-    </div>
-  );
-}
+const Row = ({ children, className }: { children: React.ReactNode; className?: string }) => (
+  <li className={cn('flex items-center gap-3 rounded-xl bg-surface-2/70 px-3 py-2.5', className)}>
+    {children}
+  </li>
+);
+
+const PRIORITY_PILL: Record<string, string> = {
+  urgent: 'bg-bad-soft text-bad',
+  high: 'bg-bad-soft text-bad',
+  medium: 'bg-warn-soft text-warn',
+  low: 'bg-ok-soft text-ok',
+};
+const DOTS = ['bg-[#4f8cff]', 'bg-[#a66bff]', 'bg-[#4fd08f]', 'bg-[#f0b860]'];
 
 /* -------------------------------------------------------------- page */
 
@@ -120,7 +188,8 @@ export default async function HomePage({
   const tz = org.timezone;
   const t = timeFmt(tz);
   const exec = can(actor, 'dashboard.executive');
-  const [home, brief, google, ig, cp, queue, glance, submitted] = await Promise.all([
+  const today = todayIn(tz);
+  const [home, brief, google, ig, cp, queue, glance, submitted, renewals] = await Promise.all([
     homeToday(actor),
     briefBlock(actor),
     googleBlock(actor),
@@ -128,23 +197,26 @@ export default async function HomePage({
     callsAndProgress(actor),
     approvalQueue(actor),
     exec
-      ? (() => {
-          const to = todayIn(tz);
-          const from = new Date(Date.parse(to) - 29 * 86_400_000).toISOString().slice(0, 10);
-          return executiveDashboard(actor, { from, to });
-        })()
+      ? executiveDashboard(actor, {
+          from: new Date(Date.parse(today) - 29 * 86_400_000).toISOString().slice(0, 10),
+          to: today,
+        })
       : Promise.resolve(null),
     db
       .select({ id: schema.dailyReports.id })
       .from(schema.dailyReports)
-      .where(and(eq(schema.dailyReports.userId, actor.id), eq(schema.dailyReports.reportDate, todayIn(tz)))),
+      .where(and(eq(schema.dailyReports.userId, actor.id), eq(schema.dailyReports.reportDate, today))),
+    can(actor, 'clients.read.all') || can(actor, 'clients.read.assigned')
+      ? upcomingRenewals(actor, 30)
+      : Promise.resolve([]),
   ]);
   if (!home) redirect('/dashboard');
   const now = new Date();
   const dateLabel = new Intl.DateTimeFormat('en-IN', {
-    weekday: 'long',
+    weekday: 'short',
     day: 'numeric',
-    month: 'long',
+    month: 'short',
+    year: 'numeric',
     timeZone: tz,
   }).format(now);
 
@@ -160,7 +232,6 @@ export default async function HomePage({
           where: e.meetLink ? 'Google Meet' : e.location,
           join: e.meetLink,
           href: e.link,
-          demo: google.demo,
         }))
       : []),
     ...home.meetings.map((m) => ({
@@ -172,28 +243,48 @@ export default async function HomePage({
       where: m.location && /^https?:/.test(m.location) ? 'Video call' : m.location,
       join: m.location && /^https?:/.test(m.location) ? m.location : null,
       href: m.dealId ? `/deals/${m.dealId}` : `/leads/${m.leadId}`,
-      demo: false,
     })),
   ].sort((a, b) => (a.allDay ? -1 : b.allDay ? 1 : Date.parse(a.start ?? '') - Date.parse(b.start ?? '')));
   const nextUp = schedule.find((s) => !s.allDay && s.start && Date.parse(s.end ?? s.start) > now.getTime());
 
-  const quick = [
-    can(actor, 'leads.write') && { href: '/leads/new', label: 'New lead' },
-    can(actor, 'tasks.write') && { href: '/tasks/new', label: 'New task' },
-    can(actor, 'deals.write') && { href: '/deals/new', label: 'New deal' },
-  ].filter(Boolean) as Array<{ href: string; label: string }>;
-
   const { overdue, dueToday } = home.taskCounts;
-  const lineParts = [
-    schedule.length
-      ? `${schedule.length} thing${schedule.length === 1 ? '' : 's'} on your calendar`
-      : 'a clear calendar',
-    dueToday + overdue
-      ? `${dueToday + overdue} task${dueToday + overdue === 1 ? '' : 's'} to finish`
-      : 'no tasks due',
-  ];
-  if (cp.calls.length) lineParts.push(`${cp.calls.length} call${cp.calls.length === 1 ? '' : 's'} to make`);
-  const dayLine = `Today you have ${lineParts.slice(0, -1).join(', ')}${lineParts.length > 1 ? ' and ' : ''}${lineParts.at(-1)}.`;
+  const due = dueToday + overdue;
+  const highCount = home.tasks.filter((x) => x.priority === 'high' || x.priority === 'urgent').length;
+  const unread = google.state === 'ready' ? google.unreadCount : null;
+
+  const showIntel = can(actor, 'campaigns.read') || exec;
+  const blockedCount = home.tasks.filter((x) => x.status === 'blocked').length;
+  const alerts: Alert[] = [
+    overdue ? { tone: 'bad', text: `${plural(overdue, 'overdue task')}`, href: '/tasks?view=mine' } : null,
+    blockedCount
+      ? { tone: 'warn', text: `${plural(blockedCount, 'blocked task')}`, href: '/tasks?view=mine' }
+      : null,
+    queue.length
+      ? {
+          tone: 'warn',
+          text: `${plural(queue.length, 'item')} waiting for your approval`,
+          href: '/approvals',
+        }
+      : null,
+    ...renewals.slice(0, 2).map(
+      (r): Alert => ({
+        tone: 'info',
+        text: `${r.name} renews ${r.renewalDate ? formatDate(r.renewalDate) : 'soon'}`,
+        href: `/clients/${r.id}`,
+      }),
+    ),
+    !submitted.length
+      ? { tone: 'muted', text: 'Today’s update not written yet', href: '/reports/daily' }
+      : null,
+  ].filter(Boolean) as Alert[];
+  const urgent = overdue + blockedCount + queue.length;
+
+  const summaryParts = [
+    plural(schedule.length, 'meeting'),
+    `${due} task${due === 1 ? '' : 's'} due`,
+    unread != null ? `${formatNumber(unread)} new email${unread === 1 ? '' : 's'}` : null,
+  ].filter(Boolean) as string[];
+  const computedSummary = `${summaryParts.join(', ')} and ${urgent ? `${plural(urgent, 'item')} needing attention` : 'no urgent issues'}.`;
 
   const googleNotice: Record<string, string> = {
     connected: 'Google connected. Your inbox and calendar now appear here.',
@@ -205,13 +296,24 @@ export default async function HomePage({
   };
   const gq = typeof sp.google === 'string' ? sp.google : null;
 
+  const quick = [
+    can(actor, 'leads.write') && { href: '/leads/new', label: 'New lead', icon: UserPlus },
+    can(actor, 'tasks.write') && { href: '/tasks/new', label: 'New task', icon: ListPlus },
+    can(actor, 'deals.write') && { href: '/deals/new', label: 'New deal', icon: Handshake },
+  ].filter(Boolean) as Array<{ href: string; label: string; icon: typeof UserPlus }>;
+
+  const leadsChange =
+    glance && glance.leads.prev.total
+      ? Math.round(((glance.leads.cur.total - glance.leads.prev.total) / glance.leads.prev.total) * 100)
+      : null;
+
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-[1480px]">
       {gq && googleNotice[gq] ? (
         <p
           role="status"
           className={cn(
-            'mb-5 rounded-lg border px-4 py-2.5 text-[13.5px]',
+            'mb-5 rounded-xl border px-4 py-2.5 text-[13.5px]',
             gq === 'connected' ? 'border-ok/30 bg-ok-soft' : 'border-warn/30 bg-warn-soft',
           )}
         >
@@ -220,293 +322,305 @@ export default async function HomePage({
       ) : null}
 
       {/* Greeting */}
-      <header className="mb-7 flex flex-wrap items-end justify-between gap-6">
-        <div className="max-w-[60ch]">
-          <p className="text-[14px] text-muted">{dateLabel}</p>
-          <h1 className="mt-1 text-[32px] leading-[1.15] font-semibold tracking-[-0.02em]">
-            {greeting(tz)}, {actor.name.split(' ')[0]}
+      <header className="mb-6 flex flex-wrap items-end justify-between gap-5">
+        <div className="min-w-0">
+          <h1 className="text-[30px] leading-tight font-semibold tracking-[-0.02em] sm:text-[34px]">
+            {greeting(tz)}, {actor.name.replace(/\s*\(.*\)/, '').split(' ')[0]}
           </h1>
-          <p className="mt-2 text-[16px] text-ink-2">{dayLine}</p>
-          {nextUp ? (
-            <p className="mt-1 text-[14px] text-muted">
-              Next up at {t(nextUp.start)}: <span className="text-ink">{nextUp.title}</span>
-            </p>
-          ) : null}
+          <p className="mt-2 text-[16px] text-ink-2">
+            Today you have{' '}
+            <a
+              href="#schedule"
+              className="text-accent underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+            >
+              {plural(schedule.length, 'meeting')}
+            </a>{' '}
+            on your calendar and{' '}
+            <a
+              href="#tasks"
+              className="text-accent underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+            >
+              {due} task{due === 1 ? '' : 's'} due
+            </a>
+            {cp.calls.length ? (
+              <>
+                , with{' '}
+                <a
+                  href="#calls"
+                  className="text-accent underline decoration-accent/40 underline-offset-4 hover:decoration-accent"
+                >
+                  {plural(cp.calls.length, 'call')}
+                </a>{' '}
+                to make
+              </>
+            ) : null}
+            .
+          </p>
         </div>
         <div className="flex flex-col items-start gap-3 sm:items-end">
-          <ProgressRing done={cp.progress.done} total={cp.progress.total} />
+          <p className="text-[14px] text-muted">{dateLabel}</p>
           {quick.length ? (
             <div className="flex flex-wrap gap-2">
               {quick.map((q) => (
-                <LinkButton key={q.href} href={q.href} size="sm">
-                  {q.label}
-                </LinkButton>
+                <Link
+                  key={q.href}
+                  href={q.href}
+                  className="inline-flex h-10 items-center gap-2 rounded-lg border border-accent/25 bg-accent-soft/60 px-3.5 text-[14px] font-medium text-ink transition-colors hover:border-accent/60"
+                >
+                  <q.icon size={16} aria-hidden className="text-accent" /> {q.label}
+                </Link>
               ))}
             </div>
           ) : null}
         </div>
       </header>
 
-      {/* The morning brief — the one bold element on the page */}
-      <section
-        aria-labelledby="brief-title"
-        className="mb-6 rounded-2xl bg-accent px-6 py-6 text-accent-ink sm:px-8 sm:py-7"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 id="brief-title" className="text-[17px] font-semibold">
-            Your morning brief
-          </h2>
-          <div className="flex items-center gap-2 text-[12.5px]">
-            {brief.state === 'ready' ? (
-              <>
-                <span className="rounded-full bg-accent-ink/15 px-2.5 py-0.5">
-                  {brief.demo
-                    ? 'Sample — written by rules, not AI'
-                    : `Written by AI at ${t(brief.createdAt)}`}
-                </span>
-                <ActionButton
-                  action={generateBriefAction}
-                  hidden={{ force: '1' }}
-                  variant="ghost"
-                  successMessage="Brief refreshed"
-                >
-                  <span className="text-accent-ink">Refresh</span>
-                </ActionButton>
-              </>
-            ) : null}
-          </div>
-        </div>
-
-        {brief.state === 'ready' ? (
-          <>
-            <p className="mt-4 max-w-[68ch] text-[19px] leading-[1.55]">{brief.content.summary}</p>
-            <div className="mt-6 grid gap-8 md:grid-cols-2">
-              {brief.content.priorities.length ? (
-                <div>
-                  <h3 className="text-[14px] font-semibold opacity-90">Do these first</h3>
-                  <ol className="mt-2 space-y-2 text-[15px] leading-snug">
-                    {brief.content.priorities.map((p, i) => (
-                      <li key={i} className="flex gap-3">
-                        <span className="mt-[1px] flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent-ink/15 text-[12px] font-semibold tabular">
-                          {i + 1}
-                        </span>
-                        <span>{p}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
-              ) : null}
-              {brief.content.strategies.length ? (
-                <div>
-                  <h3 className="text-[14px] font-semibold opacity-90">Ideas for today</h3>
-                  <ul className="mt-2 space-y-3 text-[15px] leading-snug">
-                    {brief.content.strategies.map((s, i) => (
-                      <li key={i}>
-                        <p className="font-semibold">{s.title}</p>
-                        <p className="opacity-90">{s.why}</p>
-                        <p className="mt-0.5 opacity-90">Try: {s.action}</p>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-            </div>
-            {brief.content.social.length || brief.content.trends.length ? (
-              <div className="mt-6 grid gap-8 border-t border-accent-ink/20 pt-5 md:grid-cols-2">
-                {brief.content.social.length ? (
-                  <div>
-                    <h3 className="text-[14px] font-semibold opacity-90">Social media</h3>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-[14.5px]">
-                      {brief.content.social.map((s, i) => (
-                        <li key={i}>{s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-                {brief.content.trends.length ? (
-                  <div>
-                    <h3 className="text-[14px] font-semibold opacity-90">Trends to watch</h3>
-                    <ul className="mt-2 list-disc space-y-1 pl-5 text-[14.5px]">
-                      {brief.content.trends.map((s, i) => (
-                        <li key={i}>{s}</li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
-            <p className="mt-5 text-[12.5px] opacity-90">
-              Suggestions, not facts — check before acting. Built from your tasks, leads, campaigns,
-              Instagram, calendar and email subjects.
-            </p>
-          </>
-        ) : brief.state === 'empty' ? (
-          <div className="mt-3 flex flex-wrap items-center justify-between gap-4">
-            <p className="max-w-[60ch] text-[16px] leading-relaxed opacity-90">
-              Get a short read on your day: what to do first, fresh marketing ideas, and what’s moving on
-              social media.
-              {brief.demo ? ' (Sample mode — written by rules, not AI.)' : ''}
-            </p>
-            <ActionButton
-              action={generateBriefAction}
-              size="md"
-              variant="secondary"
-              successMessage="Your brief is ready"
-            >
-              Write today’s brief
-            </ActionButton>
-          </div>
-        ) : (
-          <p className="mt-3 max-w-[60ch] text-[16px] leading-relaxed opacity-90">
-            Your daily brief appears here once the AI assistant is connected.{' '}
-            {brief.canConfigure ? (
-              <Link href="/settings/integrations" className="font-semibold underline underline-offset-2">
-                Connect it in Settings
-              </Link>
-            ) : (
-              'Ask an administrator to connect it.'
-            )}
-          </p>
-        )}
-      </section>
+      {/* Daily briefing + marketing intelligence */}
+      <div className={cn('mb-5 grid gap-5', showIntel && 'xl:grid-cols-2')}>
+        <DailyBriefingCard
+          brief={brief}
+          dateLabel={dateLabel}
+          summary={brief.state === 'ready' ? brief.content.summary : computedSummary}
+          stats={[
+            {
+              icon: 'calendar',
+              value: String(schedule.length),
+              label: schedule.length === 1 ? 'Meeting today' : 'Meetings today',
+              sub: nextUp
+                ? `Next at ${t(nextUp.start).toLowerCase()}`
+                : schedule.length
+                  ? 'All done'
+                  : 'Clear calendar',
+              href: '#schedule',
+            },
+            {
+              icon: 'tasks',
+              value: String(due),
+              label: 'Tasks due',
+              sub: overdue ? `${overdue} overdue` : highCount ? `${highCount} high priority` : 'On track',
+              href: '#tasks',
+            },
+            {
+              icon: 'mail',
+              value: unread == null ? '—' : formatNumber(unread),
+              label: 'Unread emails',
+              sub: unread == null ? 'Connect Google' : 'in your inbox',
+              href: '#inbox',
+            },
+            {
+              icon: 'phone',
+              value: String(cp.calls.length),
+              label: 'Calls pending',
+              sub: cp.calls.length ? 'waiting for you' : 'All caught up!',
+              href: '#calls',
+            },
+          ]}
+          alerts={alerts}
+          t={t}
+        />
+        {showIntel ? (
+          <Suspense fallback={<IntelCardSkeleton />}>
+            <IntelCard brief={brief} tz={tz} />
+          </Suspense>
+        ) : null}
+      </div>
 
       {exec && glance ? (
-        <Link
-          href="/dashboard"
-          className="mb-6 flex flex-wrap items-baseline gap-x-8 gap-y-1 rounded-xl border border-line bg-surface px-5 py-3.5 hover:border-line-strong"
-        >
-          <span className="text-[14px] text-muted">Last 30 days</span>
-          <span className="tabular">
-            <b className="text-[17px] font-semibold">{formatNumber(glance.leads.cur.total)}</b>{' '}
+        <div className="mb-5 flex flex-wrap items-center gap-x-7 gap-y-2 rounded-2xl border border-line bg-surface px-6 py-4 text-[15px]">
+          <span className="text-ink-2">Last 30 days</span>
+          <span className="hidden h-5 w-px bg-line sm:block" aria-hidden />
+          <span className="flex items-center gap-2 tabular">
+            <Users size={18} className="text-accent" aria-hidden />
+            <b className="text-[18px] font-semibold">{formatNumber(glance.leads.cur.total)}</b>
             <span className="text-muted">leads</span>
           </span>
-          <span className="tabular">
-            <b className="text-[17px] font-semibold">
-              {formatMoney(glance.campaigns.cur.cplMinor, org.currency)}
-            </b>{' '}
+          <span className="hidden h-5 w-px bg-line sm:block" aria-hidden />
+          <span className="flex items-center gap-2 tabular">
+            <TrendingUp size={18} className="text-accent" aria-hidden />
+            <b className="text-[18px] font-semibold">
+              {glance.campaigns.cur.cplMinor == null
+                ? '—'
+                : formatMoney(glance.campaigns.cur.cplMinor, org.currency)}
+            </b>
             <span className="text-muted">
               per lead{glance.campaigns.demoCampaigns > 0 ? ' (sample)' : ''}
             </span>
           </span>
-          <span className="tabular">
-            <b className="text-[17px] font-semibold">
-              {formatMoney(glance.pipeline.wonValue, org.currency, { compact: true })}
-            </b>{' '}
+          <span className="hidden h-5 w-px bg-line sm:block" aria-hidden />
+          <span className="flex items-center gap-2 tabular">
+            <IndianRupee size={18} className="text-accent" aria-hidden />
+            <b className="text-[18px] font-semibold">
+              {formatMoney(glance.pipeline.wonValue, org.currency, { compact: true }).replace('₹', '')}
+            </b>
             <span className="text-muted">won</span>
           </span>
-          <span className="ml-auto text-[14px] font-medium text-accent">Open executive dashboard</span>
-        </Link>
+          <span className="hidden h-5 w-px bg-line sm:block" aria-hidden />
+          <span className="flex items-center gap-2 tabular">
+            <ArrowUpRight size={18} className="text-accent" aria-hidden />
+            <b className="text-[18px] font-semibold">
+              {leadsChange == null ? '—' : `${leadsChange > 0 ? '+' : ''}${leadsChange}%`}
+            </b>
+            <span className="text-muted">leads vs previous 30 days</span>
+          </span>
+          <Link
+            href="/dashboard"
+            className="ml-auto inline-flex items-center gap-1.5 font-medium text-accent hover:underline"
+          >
+            Open executive dashboard <ArrowRight size={16} aria-hidden />
+          </Link>
+        </div>
       ) : null}
 
       {/* Row 1: the day */}
       <div className="grid gap-5 lg:grid-cols-3">
-        <Section
+        <Card
+          id="schedule"
+          icon={<CalendarDays size={24} strokeWidth={1.7} />}
           title="Today’s schedule"
-          aside={google.state === 'ready' && google.demo ? <DemoTag /> : undefined}
+          badge={google.state === 'ready' && google.demo ? <DemoTag /> : undefined}
+          action={
+            google.state === 'ready' && !google.demo ? (
+              <ViewAll href="https://calendar.google.com/calendar/r/day" external>
+                View calendar
+              </ViewAll>
+            ) : (
+              <ViewAll href="/tasks?view=calendar">View calendar</ViewAll>
+            )
+          }
         >
           {schedule.length ? (
-            <ol className="relative ml-[5px] border-l-2 border-line">
-              {schedule.map((s) => {
+            <ul className="space-y-2">
+              {schedule.map((s, i) => {
                 const past = !s.allDay && Date.parse(s.end ?? s.start ?? '') < now.getTime();
-                const current = nextUp?.key === s.key;
+                const external = !!s.href && s.href.startsWith('http');
                 return (
-                  <li key={s.key} className={cn('relative pb-4 pl-5 last:pb-0', past && 'opacity-55')}>
+                  <Row key={s.key} className={cn(nextUp?.key === s.key && 'ring-1 ring-accent/50')}>
                     <span
                       aria-hidden
                       className={cn(
-                        'absolute top-[5px] -left-[7px] h-3 w-3 rounded-full border-2 border-surface',
-                        current ? 'bg-accent' : 'bg-line-strong',
+                        'h-2.5 w-2.5 shrink-0 rounded-full',
+                        past ? 'bg-faint' : DOTS[i % DOTS.length],
                       )}
                     />
-                    <p className="text-[13px] text-muted tabular">
-                      {s.allDay ? 'All day' : `${t(s.start)}${s.end ? ` – ${t(s.end)}` : ''}`}
-                    </p>
-                    {s.href && !s.href.startsWith('http') ? (
-                      <Link href={s.href} className="font-medium hover:underline">
-                        {s.title}
-                      </Link>
-                    ) : s.href ? (
-                      <a
-                        href={s.href}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="font-medium hover:underline"
-                      >
-                        {s.title}
-                      </a>
-                    ) : (
-                      <p className="font-medium">{s.title}</p>
-                    )}
-                    {s.join ? (
+                    <span className="w-[86px] shrink-0 rounded-lg bg-surface px-2 py-1.5 text-center text-[14px] font-semibold tabular">
+                      {s.allDay ? 'All day' : t(s.start)}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      {s.href && !external ? (
+                        <Link
+                          href={s.href}
+                          className="block truncate text-[15px] font-medium hover:underline"
+                        >
+                          {s.title}
+                        </Link>
+                      ) : s.href ? (
+                        <a
+                          href={s.href}
+                          target="_blank"
+                          rel="noreferrer noopener"
+                          className="block truncate text-[15px] font-medium hover:underline"
+                        >
+                          {s.title}
+                        </a>
+                      ) : (
+                        <p className="truncate text-[15px] font-medium">{s.title}</p>
+                      )}
+                      {s.where ? (
+                        <p className="mt-0.5 flex items-center gap-1 truncate text-[13px] text-muted">
+                          <MapPin size={13} aria-hidden /> {s.where}
+                        </p>
+                      ) : null}
+                    </div>
+                    {s.join && !past ? (
                       <a
                         href={s.join}
                         target="_blank"
                         rel="noreferrer noopener"
-                        className="mt-0.5 block text-[13px] font-medium text-accent hover:underline"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-line-strong px-2.5 py-1 text-[13px] font-medium hover:border-accent"
                       >
-                        Join {s.where ?? 'call'}
+                        <Video size={14} aria-hidden /> Join
                       </a>
-                    ) : s.where ? (
-                      <p className="text-[13px] text-muted">{s.where}</p>
                     ) : null}
-                  </li>
+                    <RowMenu
+                      label={`More for ${s.title}`}
+                      items={[
+                        { label: external ? 'Open in Google Calendar' : 'Open', href: s.href ?? undefined },
+                        { label: 'Copy join link', copy: s.join ?? undefined },
+                      ]}
+                    />
+                  </Row>
                 );
               })}
-            </ol>
+            </ul>
           ) : (
             <Quiet>Nothing scheduled today.</Quiet>
           )}
           <GoogleFooter google={google} purpose="calendar" />
-        </Section>
+        </Card>
 
-        <Section
+        <Card
+          id="tasks"
+          icon={<SquareCheckBig size={24} strokeWidth={1.7} />}
           title="Tasks"
-          aside={
-            <Link href="/tasks?view=mine" className="text-accent hover:underline">
-              All my tasks
-            </Link>
+          badge={
+            cp.progress.total ? (
+              <span className="text-[13px] text-muted tabular">
+                {cp.progress.done}/{cp.progress.total} done today
+              </span>
+            ) : undefined
           }
+          action={<ViewAll href="/tasks?view=mine">All my tasks</ViewAll>}
         >
-          <div
-            className={cn('mb-3 h-2 rounded-full bg-surface-2', !cp.progress.total && 'hidden')}
-            aria-hidden
-          >
-            <div
-              className="h-2 rounded-full bg-accent"
-              style={{ width: `${cp.progress.total ? (cp.progress.done / cp.progress.total) * 100 : 0}%` }}
-            />
-          </div>
           {home.tasks.length ? (
-            <ul className="-mx-2">
+            <ul className="space-y-1">
               {home.tasks.map((task) => {
-                const late = !!task.dueAt && task.dueAt < now;
+                const dueDay = task.dueAt ? todayIn(tz, task.dueAt) : null;
+                const late = !!task.dueAt && task.dueAt < now && dueDay !== today;
+                const label = late
+                  ? 'Overdue'
+                  : dueDay === today
+                    ? 'Today'
+                    : dueDay
+                      ? formatDate(dueDay)
+                      : 'No date';
                 return (
                   <li
                     key={task.id}
-                    className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-surface-2"
+                    className="flex items-center gap-3 rounded-xl px-2 py-2 hover:bg-surface-2/70"
                   >
-                    <div className="min-w-0 flex-1">
-                      <Link
-                        href={`/tasks/${task.id}`}
-                        className="block truncate text-[14.5px] hover:underline"
+                    {task.status === 'blocked' ? (
+                      <span className="h-5 w-5 shrink-0" aria-hidden />
+                    ) : (
+                      <TaskCheck id={task.id} title={task.title} />
+                    )}
+                    <Link
+                      href={`/tasks/${task.id}`}
+                      className="min-w-0 flex-1 truncate text-[15px] hover:underline"
+                    >
+                      {task.title}
+                    </Link>
+                    {task.status === 'blocked' ? (
+                      <span className="rounded-md bg-bad-soft px-2 py-1 text-[12px] font-medium text-bad">
+                        Blocked
+                      </span>
+                    ) : (
+                      <span
+                        className={cn(
+                          'rounded-md px-2 py-1 text-[12px] font-medium capitalize',
+                          PRIORITY_PILL[task.priority] ?? PRIORITY_PILL.medium,
+                        )}
                       >
-                        {task.title}
-                      </Link>
-                      <p className={cn('truncate text-[12.5px]', late ? 'text-bad' : 'text-muted')}>
-                        {late ? 'Overdue, ' : 'Due '}
-                        {task.dueAt ? relativeTime(task.dueAt) : ''}
-                        {task.status === 'blocked' ? ', blocked' : ''}
-                      </p>
-                    </div>
-                    {task.status !== 'blocked' ? (
-                      <ActionButton
-                        action={taskStatusAction}
-                        hidden={{ id: task.id, status: 'done' }}
-                        successMessage="Task done"
-                      >
-                        Done
-                      </ActionButton>
-                    ) : null}
+                        {task.priority}
+                      </span>
+                    )}
+                    <span
+                      className={cn(
+                        'w-[78px] shrink-0 rounded-md px-2 py-1 text-center text-[12px] font-medium',
+                        late ? 'bg-bad-soft text-bad' : 'bg-surface-2 text-ink-2',
+                      )}
+                    >
+                      {label}
+                    </span>
                   </li>
                 );
               })}
@@ -514,101 +628,109 @@ export default async function HomePage({
           ) : (
             <Quiet>{cp.progress.done ? 'All done for today. Nice work.' : 'No tasks due today.'}</Quiet>
           )}
-          {queue.length ? (
-            <Link
-              href="/approvals"
-              className="mt-3 block rounded-lg bg-warn-soft px-3 py-2 text-[13.5px] hover:underline"
-            >
-              {queue.length} item{queue.length === 1 ? '' : 's'} waiting for your approval
-            </Link>
-          ) : null}
-          {!submitted.length ? (
-            <Link href="/reports/daily" className="mt-3 block text-[13.5px] text-accent hover:underline">
-              Write today’s update
-            </Link>
-          ) : null}
-        </Section>
+        </Card>
 
-        <Section
+        <Card
+          id="calls"
+          icon={<Phone size={24} strokeWidth={1.7} />}
           title="Calls to make"
-          aside={
-            home.leads.length > cp.calls.length ? (
-              <Link href="/leads?view=mine" className="text-accent hover:underline">
-                My leads
-              </Link>
-            ) : undefined
-          }
+          action={<ViewAll href="/leads?view=mine" />}
         >
           {cp.calls.length ? (
-            <ul className="-mx-2">
+            <ul className="space-y-2">
               {cp.calls.map((c) => {
                 const late = !!c.nextActionAt && c.nextActionAt < now;
+                const what =
+                  c.stage === 'new'
+                    ? `New lead${c.interest ? ` · ${c.interest}` : ''}`
+                    : `${c.nextAction ?? 'Follow up'}${c.interest ? ` · ${c.interest}` : ''}`;
                 return (
-                  <li key={c.id} className="flex items-center gap-3 rounded-lg px-2 py-2 hover:bg-surface-2">
+                  <Row key={c.id}>
+                    <Avatar name={c.name} />
                     <div className="min-w-0 flex-1">
                       <Link
                         href={`/leads/${c.id}`}
-                        className="block truncate text-[14.5px] font-medium hover:underline"
+                        className="block truncate text-[15px] font-semibold hover:underline"
                       >
                         {c.name}
                       </Link>
-                      <p className={cn('truncate text-[12.5px]', late ? 'text-bad' : 'text-muted')}>
-                        {c.stage === 'new'
-                          ? 'First call'
-                          : `${c.nextAction ?? 'Follow up'}${c.nextActionAt ? `, ${relativeTime(c.nextActionAt)}` : ''}`}
+                      <p className={cn('truncate text-[13px]', late ? 'text-bad' : 'text-muted')}>
+                        {what}
+                        {late && c.nextActionAt ? ` · due ${relativeTime(c.nextActionAt)}` : ''}
                       </p>
                     </div>
+                    <span className="hidden text-[13.5px] text-ink-2 tabular xl:inline">{c.phone}</span>
                     <a
                       href={`tel:${c.phone}`}
-                      className="shrink-0 rounded-md border border-line-strong px-2.5 py-1 text-[13px] font-medium tabular hover:bg-surface-2"
                       aria-label={`Call ${c.name}`}
+                      className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-accent-soft text-accent transition-colors hover:bg-accent hover:text-accent-ink"
                     >
-                      Call
+                      <Phone size={17} aria-hidden />
                     </a>
-                  </li>
+                  </Row>
                 );
               })}
             </ul>
           ) : (
             <Quiet>No calls waiting. New leads with a phone number will show up here.</Quiet>
           )}
-        </Section>
+        </Card>
       </div>
 
       {/* Row 2: what's come in */}
       <div className="mt-5 grid gap-5 lg:grid-cols-3">
-        <Section
+        <Card
+          id="inbox"
+          icon={<Mail size={24} strokeWidth={1.7} />}
           title="Inbox"
-          aside={
+          badge={
+            <>
+              {google.state === 'ready' && google.unreadCount != null ? (
+                <span className="rounded-full bg-bad-soft px-2.5 py-0.5 text-[12.5px] font-medium text-bad tabular">
+                  {formatNumber(google.unreadCount)} unread
+                </span>
+              ) : null}
+              {google.state === 'ready' && google.demo ? <DemoTag /> : null}
+            </>
+          }
+          action={
             google.state === 'ready' ? (
-              <span className="flex items-center gap-2">
-                {google.demo ? <DemoTag /> : null}
-                {google.unreadCount != null ? `${google.unreadCount} unread` : null}
-              </span>
+              <ViewAll href="https://mail.google.com/mail/u/0/#inbox" external />
             ) : undefined
           }
         >
           {google.state === 'ready' ? (
             google.recent.length ? (
-              <ul className="-mx-2">
-                {google.recent.slice(0, 5).map((m) => (
-                  <li key={m.id}>
-                    <a
-                      href={m.link}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="block rounded-lg px-2 py-2 hover:bg-surface-2"
-                    >
+              <ul className="space-y-2">
+                {google.recent.slice(0, 4).map((m) => (
+                  <Row key={m.id} className="items-start">
+                    <span
+                      aria-hidden
+                      className={cn(
+                        'mt-4 h-2 w-2 shrink-0 rounded-full',
+                        m.unread ? 'bg-accent' : 'bg-transparent',
+                      )}
+                    />
+                    <Avatar name={m.from} className="mt-0.5 h-10 w-10 bg-white text-[#1d2a30]" />
+                    <a href={m.link} target="_blank" rel="noreferrer noopener" className="min-w-0 flex-1">
                       <span className="flex items-baseline justify-between gap-2">
-                        <span className={cn('truncate text-[14px]', m.unread && 'font-semibold')}>
+                        <span
+                          className={cn('truncate text-[14.5px]', m.unread ? 'font-semibold' : 'font-medium')}
+                        >
                           {m.from}
                         </span>
-                        <span className="shrink-0 text-[12px] text-faint">{m.date ? t(m.date) : ''}</span>
+                        <span className="shrink-0 text-[12.5px] text-muted">
+                          {m.date ? t(m.date).toLowerCase() : ''}
+                        </span>
                       </span>
                       <span className="block truncate text-[13.5px]">{m.subject}</span>
                       <span className="block truncate text-[12.5px] text-muted">{m.snippet}</span>
                     </a>
-                  </li>
+                    <RowMenu
+                      label={`More for ${m.subject}`}
+                      items={[{ label: 'Open in Gmail', href: m.link }]}
+                    />
+                  </Row>
                 ))}
               </ul>
             ) : (
@@ -616,28 +738,39 @@ export default async function HomePage({
             )
           ) : null}
           <GoogleFooter google={google} purpose="inbox" />
-        </Section>
+        </Card>
 
-        <Section
+        <Card
+          icon={<Linkedin size={24} strokeWidth={1.7} />}
           title="LinkedIn messages"
-          aside={google.state === 'ready' && google.demo ? <DemoTag /> : undefined}
+          badge={google.state === 'ready' && google.demo ? <DemoTag /> : undefined}
+          action={<ViewAll href="https://www.linkedin.com/messaging/" external />}
         >
           {google.state === 'ready' ? (
             google.linkedin.length ? (
-              <ul className="-mx-2">
-                {google.linkedin.map((m) => (
-                  <li key={m.id}>
-                    <a
-                      href={m.link}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="block rounded-lg px-2 py-2 hover:bg-surface-2"
-                    >
-                      <span className="block truncate text-[14px] font-medium">{m.subject}</span>
-                      <span className="block truncate text-[12.5px] text-muted">{m.snippet}</span>
-                    </a>
-                  </li>
-                ))}
+              <ul className="space-y-2">
+                {google.linkedin.slice(0, 4).map((m) => {
+                  const parsed = parseLinkedIn(m.subject);
+                  return (
+                    <Row key={m.id} className="items-start">
+                      <Avatar name={parsed.name} className="mt-0.5" />
+                      <a href={m.link} target="_blank" rel="noreferrer noopener" className="min-w-0 flex-1">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-[14.5px] font-semibold">{parsed.name}</span>
+                          <span className="shrink-0 text-[12.5px] text-muted">
+                            {m.date ? relativeTime(new Date(m.date)) : ''}
+                          </span>
+                        </span>
+                        <span className="block truncate text-[13.5px] text-accent">{parsed.kind}</span>
+                        <span className="block truncate text-[12.5px] text-muted">{m.snippet}</span>
+                      </a>
+                      <RowMenu
+                        label={`More for ${m.subject}`}
+                        items={[{ label: 'Open the alert email', href: m.link }]}
+                      />
+                    </Row>
+                  );
+                })}
               </ul>
             ) : (
               <Quiet>No LinkedIn messages in the last 3 days.</Quiet>
@@ -645,53 +778,81 @@ export default async function HomePage({
           ) : (
             <Quiet>Shown from LinkedIn’s email alerts once Google is connected.</Quiet>
           )}
-          <p className="mt-2 text-[12px] text-faint">
-            LinkedIn doesn’t let apps read your inbox, so these come from the message alerts LinkedIn emails
-            you.
+          <p className="px-2 pt-2 text-[12px] text-faint">
+            From the message alerts LinkedIn emails you — LinkedIn doesn’t let apps read your inbox.
           </p>
-        </Section>
+        </Card>
 
-        <Section title="Instagram today" aside={ig.state === 'ready' && ig.demo ? <DemoTag /> : undefined}>
+        <Card
+          icon={<Instagram size={24} strokeWidth={1.7} />}
+          title="Instagram today"
+          badge={ig.state === 'ready' && ig.demo ? <DemoTag /> : undefined}
+          action={
+            ig.state === 'ready' && ig.username && !ig.demo ? (
+              <ViewAll href={`https://www.instagram.com/${ig.username}/`} external />
+            ) : undefined
+          }
+        >
           {ig.state === 'ready' ? (
             <>
-              <div className="flex flex-wrap items-baseline gap-x-6 gap-y-2">
-                <div>
-                  <p className="text-[26px] leading-none font-semibold tabular">
-                    {ig.followers == null ? 'Unavailable' : formatNumber(ig.followers)}
-                  </p>
-                  <p className="mt-1 text-[13px] text-muted">
-                    followers
-                    {ig.followerChange != null ? (
-                      <span
-                        className={cn('ml-1.5 font-medium', ig.followerChange >= 0 ? 'text-ok' : 'text-bad')}
-                      >
-                        {ig.followerChange >= 0 ? '+' : ''}
-                        {formatNumber(ig.followerChange)} since yesterday
-                      </span>
-                    ) : null}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[18px] leading-none font-semibold tabular">{ig.postsLast24h}</p>
-                  <p className="mt-1 text-[13px] text-muted">posts in 24h</p>
-                </div>
-                <div>
-                  <p className="text-[18px] leading-none font-semibold tabular">
-                    {ig.engagementRecent == null ? 'Unavailable' : formatNumber(ig.engagementRecent)}
-                  </p>
-                  <p className="mt-1 text-[13px] text-muted">avg likes + comments</p>
-                </div>
-              </div>
-              {ig.top ? (
-                <div className="mt-4 rounded-lg bg-surface-2 px-3 py-2.5">
-                  <p className="text-[12.5px] text-muted">Best recent post</p>
-                  <p className="mt-0.5 line-clamp-2 text-[14px]">{ig.top.caption ?? 'Untitled post'}</p>
-                  <p className="mt-1 text-[12.5px] text-muted tabular">
-                    {formatNumber(ig.top.likes ?? 0)} likes, {formatNumber(ig.top.comments ?? 0)} comments
-                  </p>
-                </div>
+              <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-2 2xl:grid-cols-4">
+                <Stat value={ig.followers == null ? '—' : formatNumber(ig.followers)} label="Followers" />
+                <Stat
+                  value={
+                    ig.followerChange == null || !ig.prevFollowers
+                      ? '—'
+                      : `${ig.followerChange >= 0 ? '↑' : '↓'} ${Math.abs((ig.followerChange / ig.prevFollowers) * 100).toFixed(1)}%`
+                  }
+                  label="from yesterday"
+                  tone={ig.followerChange == null ? undefined : ig.followerChange >= 0 ? 'ok' : 'bad'}
+                />
+                <Stat value={`${ig.monthPosts}${ig.monthPostsCapped ? '+' : ''}`} label="Posts this month" />
+                <Stat
+                  value={ig.recentLikes == null ? '—' : formatNumber(ig.recentLikes)}
+                  label="Likes, recent posts"
+                />
+              </dl>
+              {ig.recent.length ? (
+                <>
+                  <p className="mt-4 mb-2 px-2 text-[14px] font-semibold">Recent posts</p>
+                  <ul className="space-y-2">
+                    {ig.recent.slice(0, 3).map((m) => (
+                      <Row key={m.id}>
+                        {m.thumb ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={m.thumb}
+                            alt=""
+                            className="h-12 w-12 shrink-0 rounded-lg object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <span
+                            aria-hidden
+                            className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-[linear-gradient(135deg,#feda75,#d62976,#4f5bd5)] text-white"
+                          >
+                            <Instagram size={18} />
+                          </span>
+                        )}
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-[14.5px] font-medium">{m.caption ?? 'Untitled post'}</p>
+                          <p className="text-[12.5px] text-muted tabular">
+                            {m.likes == null ? '—' : formatNumber(m.likes)} likes ·{' '}
+                            {m.comments == null ? '—' : formatNumber(m.comments)} comments
+                          </p>
+                        </div>
+                        <span className="hidden shrink-0 text-[12.5px] text-muted sm:inline">
+                          {relativeTime(new Date(m.timestamp))}
+                        </span>
+                        <RowMenu
+                          label="More for this post"
+                          items={[{ label: 'Open on Instagram', href: m.permalink ?? undefined }]}
+                        />
+                      </Row>
+                    ))}
+                  </ul>
+                </>
               ) : null}
-              {ig.username ? <p className="mt-3 text-[12.5px] text-faint">@{ig.username}</p> : null}
             </>
           ) : ig.state === 'error' ? (
             <Quiet>Instagram didn’t respond: {ig.message}</Quiet>
@@ -707,10 +868,44 @@ export default async function HomePage({
               )}
             </Quiet>
           )}
-        </Section>
+        </Card>
       </div>
     </div>
   );
+}
+
+function Stat({ value, label, tone }: { value: string; label: string; tone?: 'ok' | 'bad' }) {
+  return (
+    <div className="rounded-xl bg-surface-2/70 px-3 py-2.5">
+      <dd
+        className={cn(
+          'text-[20px] leading-tight font-semibold tabular',
+          tone === 'ok' && 'text-ok',
+          tone === 'bad' && 'text-bad',
+        )}
+      >
+        {value}
+      </dd>
+      <dt className="text-[12.5px] text-muted">{label}</dt>
+    </div>
+  );
+}
+
+/** "Rahul Shenoy sent you a message" → { name, kind }. Falls back to the subject itself. */
+function parseLinkedIn(subject: string) {
+  const s = subject.replace(/^DEMO · /, '');
+  const patterns: Array<[RegExp, string]> = [
+    [/^(.+?) sent you a message/i, 'Message'],
+    [/^New InMail from (.+)$/i, 'InMail'],
+    [/^(.+?) wants to connect/i, 'Connection request'],
+    [/^(.+?) accepted your invitation/i, 'Invitation accepted'],
+    [/^(.+?) (?:just )?messaged you/i, 'Message'],
+  ];
+  for (const [re, kind] of patterns) {
+    const m = s.match(re);
+    if (m) return { name: m[1].trim(), kind };
+  }
+  return { name: s.split(/[:,]/)[0].slice(0, 40), kind: 'LinkedIn alert' };
 }
 
 /** Connection state and actions for the person's own Google account. */
@@ -723,7 +918,7 @@ function GoogleFooter({
 }) {
   if (google.state === 'ready')
     return purpose === 'inbox' && !google.demo ? (
-      <div className="mt-3 flex items-center justify-between gap-2 text-[12px] text-faint">
+      <div className="mt-2 flex items-center justify-between gap-2 px-2 text-[12px] text-faint">
         <span className="truncate">{google.email ? `Connected as ${google.email}` : 'Google connected'}</span>
         <ActionButton
           action={disconnectGoogleAction}
@@ -736,11 +931,11 @@ function GoogleFooter({
     ) : null;
   if (google.state === 'not_connected')
     return (
-      <div className="mt-2">
+      <div className="px-2 pt-1">
         <Quiet>{purpose === 'inbox' ? 'See new mail at a glance.' : 'Bring in your Google Calendar.'}</Quiet>
         <a
           href="/api/google/connect"
-          className="inline-flex h-8 items-center rounded-md bg-accent px-3 text-[13px] font-medium text-accent-ink"
+          className="inline-flex h-9 items-center rounded-lg bg-accent px-3.5 text-[13.5px] font-medium text-accent-ink"
         >
           Connect Google
         </a>
@@ -751,7 +946,7 @@ function GoogleFooter({
     );
   if (google.state === 'error')
     return (
-      <div className="mt-2">
+      <div className="px-2">
         <Quiet>Google stopped responding: {google.message}</Quiet>
         <a href="/api/google/connect" className="text-[13px] font-medium text-accent hover:underline">
           Reconnect Google
