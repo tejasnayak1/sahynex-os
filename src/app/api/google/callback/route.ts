@@ -1,3 +1,4 @@
+import { appUrl } from '@/lib/app-url';
 import { NextResponse } from 'next/server';
 import { getCurrentActor } from '@/server/auth/current';
 import { emailFromIdToken, exchangeCode, verifyState } from '@/server/integrations/google-user';
@@ -6,9 +7,9 @@ import { saveGoogleConnection } from '@/server/services/briefing';
 /** Google redirects here after the person approves read-only access. */
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const back = (status: string) => NextResponse.redirect(new URL(`/home?google=${status}`, req.url));
+  const back = (status: string) => NextResponse.redirect(appUrl(`/home?google=${status}`, req));
   const actor = await getCurrentActor();
-  if (!actor) return NextResponse.redirect(new URL('/login?next=%2Fhome', req.url));
+  if (!actor) return NextResponse.redirect(appUrl('/login?next=%2Fhome', req));
   if (url.searchParams.get('error')) return back('cancelled');
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state') ?? '';
