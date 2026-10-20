@@ -13,7 +13,7 @@ import { ADS_ADAPTERS, ga4Adapter } from '../integrations/adapters';
 import type { Connection } from '../integrations/types';
 import { parseTemplates, whatsappAdapter } from '../integrations/whatsapp';
 import { instagramAdapter } from '../integrations/instagram';
-import { aiAdapter } from '../integrations/ai';
+import { aiAdapter, aiProvider } from '../integrations/ai';
 import { bool, optUuid, parse, reqStr } from '../validation';
 
 const {
@@ -405,7 +405,7 @@ export const INTEGRATION_CATALOG: Array<{
     provider: 'ai_assistant',
     label: 'AI assistant (daily brief)',
     description:
-      'Writes each person’s morning brief — priorities, marketing ideas, social insights and trends — from the app’s own figures (Anthropic API).',
+      'Writes each person’s morning brief — priorities, marketing ideas, social insights and trends — from the app’s own figures (free Google Gemini or Anthropic API).',
     supportsDemo: true,
   },
   {
@@ -598,7 +598,10 @@ export async function testIntegration(actor: Actor, provider: Connection['provid
     } else if (provider === 'ai_assistant') {
       const cfg = aiAdapter.checkConfig();
       result = cfg.ok
-        ? { ok: true, message: 'API key present. Generate a brief from Home to confirm it works end to end.' }
+        ? {
+            ok: true,
+            message: `${aiProvider() === 'gemini' ? 'Gemini' : 'Anthropic'} API key present (model ${aiAdapter.model()}). Generate a brief from Home to confirm it works end to end.`,
+          }
         : { ok: false, message: `Missing: ${cfg.missing.join(', ')}` };
     } else if (provider === 'google_workspace') {
       const missing = ['GOOGLE_OAUTH_CLIENT_ID', 'GOOGLE_OAUTH_CLIENT_SECRET', 'APP_URL'].filter(

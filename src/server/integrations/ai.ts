@@ -1,5 +1,12 @@
 /**
- * AI daily brief via the Anthropic Messages API (POST https://api.anthropic.com/v1/messages).
+ * AI daily brief. Two providers:
+ *  - Google Gemini (generativelanguage.googleapis.com, generateContent) — has a free tier.
+ *  - Anthropic Messages API (POST https://api.anthropic.com/v1/messages) — paid.
+ * AI_PROVIDER picks one; if unset, Gemini is used when only GEMINI_API_KEY is set.
+ *
+ * Gemini's free tier may use prompts to improve Google's products, so by default lead names,
+ * email senders and LinkedIn alert subjects are replaced with neutral placeholders before
+ * sending (AI_ANONYMISE=false turns this off).
  *
  * The model receives only the facts the app assembled (tasks, leads, campaigns, Instagram,
  * calendar titles, email senders/subjects — never email bodies). It must not invent numbers.
@@ -11,20 +18,56 @@ import { apiFetch } from './http';
 
 const env = (k: string) => process.env[k]?.trim() || '';
 
+export type AiProvider = 'anthropic' | 'gemini';
+
+export function aiProvider(): AiProvider {
+  const p = env('AI_PROVIDER').toLowerCase();
+  if (p === 'gemini' || p === 'anthropic') return p;
+  return env('GEMINI_API_KEY') && !env('ANTHROPIC_API_KEY') ? 'gemini' : 'anthropic';
+}
+
 export const aiAdapter = {
-  requiredEnv: ['ANTHROPIC_API_KEY'],
-  model: () => env('AI_MODEL') || 'claude-sonnet-5-5',
-  setupSteps: [
-    'Create an API key at console.anthropic.com (Settings → API keys) and add billing.',
-    'Set ANTHROPIC_API_KEY in the server environment. Optional: AI_MODEL (default claude-sonnet-5-5) and AI_WEB_SEARCH=true to let the brief look up current trends on the web (extra cost per search).',
-    'Choose Live below. Each person gets at most one automatic brief per day; “Refresh” regenerates on request.',
-    'What is sent: your tasks, lead and campaign figures, Instagram numbers, calendar event titles and email senders/subjects (never email bodies).',
-  ],
+  requiredEnv: () => (aiProvider() === 'gemini' ? ['GEMINI_API_KEY'] : ['ANTHROPIC_API_KEY']),
+  model: () =>
+    env('AI_MODEL') || (aiProvider() === 'gemini' ? 'gemini-flash-lite-latest' : 'claude-sonnet-5-5'),
+  get setupSteps() {
+    return aiProvider() === 'gemini'
+      ? [
+          'Free option: create a Gemini API key at aistudio.google.com → Get API key (no billing needed for the free tier).',
+          'Set AI_PROVIDER=gemini and GEMINI_API_KEY in the server environment. Optional: AI_MODEL (default gemini-flash-lite-latest; gemini-flash-latest writes better but has a lower free daily limit).',
+          'Free-tier note: Google may use free-tier prompts to improve its products, so lead names and email senders are anonymised before sending (AI_ANONYMISE=false to turn off). Live web trends need a paid Gemini plan (AI_WEB_SEARCH=true).',
+          'Choose Live below. Each person gets at most one automatic brief per day; “Refresh” regenerates on request.',
+        ]
+      : [
+          'Create an API key at platform.claude.com (Settings → API keys) and add billing. Or use the free Gemini option: set AI_PROVIDER=gemini.',
+          'Set ANTHROPIC_API_KEY in the server environment. Optional: AI_MODEL (default claude-sonnet-5-5) and AI_WEB_SEARCH=true to let the brief look up current trends on the web (extra cost per search).',
+          'Choose Live below. Each person gets at most one automatic brief per day; “Refresh” regenerates on request.',
+          'What is sent: your tasks, lead and campaign figures, Instagram numbers, calendar event titles and email senders/subjects (never email bodies).',
+        ];
+  },
   checkConfig() {
-    const missing = this.requiredEnv.filter((k) => !env(k));
+    const missing = this.requiredEnv().filter((k) => !env(k));
     return { ok: missing.length === 0, missing };
   },
 };
+
+/** Replaces personal names in the facts with neutral placeholders (used for Gemini's free tier). */
+export function anonymiseFacts(facts: Record<string, unknown>): Record<string, unknown> {
+  const f = structuredClone(facts) as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
+  if (Array.isArray(f.leads?.waitingForMe))
+    f.leads.waitingForMe = f.leads.waitingForMe.map((l: Record<string, unknown>, i: number) => ({
+      ...l,
+      name: `Lead ${i + 1}`,
+    }));
+  if (f.email && typeof f.email === 'object') {
+    if (Array.isArray(f.email.recent))
+      f.email.recent = f.email.recent.map((m: Record<string, unknown>) => ({ subject: m.subject }));
+    if (Array.isArray(f.email.linkedinMessages))
+      f.email.linkedinMessages = `${f.email.linkedinMessages.length} LinkedIn message alert(s)`;
+  }
+  if (f.person) f.person = {};
+  return f;
+}
 
 export type BriefContent = {
   summary: string;
@@ -38,6 +81,7 @@ const SYSTEM = `You write a short morning brief for the co-founder/CMO of Sahyne
 
 Rules:
 - Use ONLY the facts in the JSON you are given (and web search results if you have them). Never invent numbers, names or events. If something is missing, say it is not available.
+- If you have no web search results, write "trends" as general, evergreen admissions-marketing patterns and do not present them as today's news.
 - Be specific and practical: reference the actual tasks, leads, campaigns and Instagram posts in the facts.
 - Strategies are ideas, clearly framed as suggestions.
 - Keep it short: summary ≤ 3 sentences; 3 priorities; 3 strategies; up to 3 social insights; up to 3 trends.
@@ -76,6 +120,10 @@ export async function generateBriefWithAI(
   facts: Record<string, unknown>,
 ): Promise<{ content: BriefContent; model: string }> {
   const model = aiAdapter.model();
+  if (aiProvider() === 'gemini') {
+    const sent = env('AI_ANONYMISE') === 'false' ? facts : anonymiseFacts(facts);
+    return { content: parseBrief(await callGemini(model, sent)), model };
+  }
   const body: Record<string, unknown> = {
     model,
     max_tokens: 1500,
@@ -99,6 +147,43 @@ export async function generateBriefWithAI(
     .map((b) => b.text)
     .join('\n');
   return { content: parseBrief(text), model };
+}
+
+async function callGemini(model: string, facts: Record<string, unknown>): Promise<string> {
+  if (!/^[\w.-]{3,80}$/.test(model)) throw new PermanentError('AI_MODEL is not a valid Gemini model name.');
+  const search = env('AI_WEB_SEARCH') === 'true';
+  const body: Record<string, unknown> = {
+    systemInstruction: { parts: [{ text: SYSTEM }] },
+    contents: [{ role: 'user', parts: [{ text: `Facts for today (JSON):\n${JSON.stringify(facts)}` }] }],
+    // JSON mode can't be combined with the search tool, so only request it without search.
+    generationConfig: { maxOutputTokens: 4096, ...(search ? {} : { responseMimeType: 'application/json' }) },
+  };
+  if (search) body.tools = [{ google_search: {} }];
+  const res = (await apiFetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+    {
+      method: 'POST',
+      headers: { 'x-goog-api-key': env('GEMINI_API_KEY'), 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+      timeoutMs: 90_000,
+    },
+  )) as {
+    candidates?: Array<{
+      content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+      finishReason?: string;
+    }>;
+    promptFeedback?: { blockReason?: string };
+  };
+  if (res.promptFeedback?.blockReason)
+    throw new PermanentError(`Gemini blocked the request (${res.promptFeedback.blockReason}).`);
+  const parts = res.candidates?.[0]?.content?.parts ?? [];
+  const text = parts
+    .filter((p) => p.text && !p.thought)
+    .map((p) => p.text)
+    .join('\n');
+  if (!text)
+    throw new PermanentError(`Gemini returned no text (${res.candidates?.[0]?.finishReason ?? 'unknown'}).`);
+  return text;
 }
 
 /**
