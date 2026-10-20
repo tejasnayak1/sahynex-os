@@ -1,3 +1,4 @@
+import { appUrl } from '@/lib/app-url';
 import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 import { SESSION_COOKIE, invalidateSession } from '@/server/auth/session';
@@ -10,5 +11,5 @@ export async function POST(req: Request) {
   const token = store.get(SESSION_COOKIE)?.value;
   if (token) await invalidateSession(token);
   store.delete(SESSION_COOKIE);
-  return NextResponse.redirect(new URL('/login', req.url), 303);
+  return NextResponse.redirect(appUrl('/login', req), 303);
 }

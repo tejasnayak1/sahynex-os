@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { appUrl } from '@/lib/app-url';
 
 /**
  * Optimistic check only: send visitors without a session cookie to the login page.
@@ -6,7 +7,7 @@ import { NextResponse, type NextRequest } from 'next/server';
  */
 export function proxy(req: NextRequest) {
   if (!req.cookies.get('sx_session')) {
-    const url = new URL('/login', req.url);
+    const url = appUrl('/login', req);
     url.searchParams.set('next', req.nextUrl.pathname + req.nextUrl.search);
     return NextResponse.redirect(url);
   }
