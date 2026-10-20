@@ -71,3 +71,31 @@ export async function authenticate(
   });
   return { user, ...session };
 }
+
+/**
+ * Sign in with Google: only for an existing, active account with exactly this email. Google has
+ * already verified the address; nothing is created automatically.
+ */
+export async function authenticateWithGoogle(
+  email: string,
+  meta: { ip?: string | null; userAgent?: string | null },
+) {
+  const normalized = email.trim().toLowerCase();
+  await rateLimit(`login:ip:${meta.ip ?? 'unknown'}`, Number(process.env.LOGIN_RATE_LIMIT_IP ?? 30), 15 * 60);
+  const candidates = await db.select().from(schema.users).where(eq(schema.users.email, normalized)).limit(2);
+  const user = candidates.length === 1 ? candidates[0] : null;
+  if (!user || !user.isActive)
+    throw new AppError('UNAUTHENTICATED', 'There’s no active Sahynex OS account for that Google email.');
+  if (user.lockedUntil && user.lockedUntil > new Date())
+    throw new AppError('UNAUTHENTICATED', 'This account is temporarily locked. Try again later.');
+  const session = await createSession(user.id, meta);
+  await writeAudit(db, {
+    orgId: user.orgId,
+    actorId: user.id,
+    action: 'auth.login_google',
+    entityType: 'user',
+    entityId: user.id,
+    ip: meta.ip ?? null,
+  });
+  return session;
+}

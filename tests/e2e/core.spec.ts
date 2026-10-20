@@ -31,7 +31,7 @@ test('vertical slice: sign in → create lead → automatic owner + follow-up ta
   await page.goto('/dashboard');
   await expect(page).toHaveURL(/\/home$/);
   await expect(page.getByRole('heading', { name: /Good (morning|afternoon|evening), / })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Your morning brief' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Your daily briefing' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Calls to make' })).toBeVisible();
 });
 

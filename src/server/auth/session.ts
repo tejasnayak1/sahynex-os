@@ -47,6 +47,7 @@ export async function loadActorForUser(userId: string): Promise<UserActor | null
     email: r.user.email,
     roleKey: r.role.key,
     roleName: r.role.name,
+    jobTitle: r.user.jobTitle,
     clientId: r.user.clientId,
     permissions: new Set(perms.map((p) => p.key as Permission)),
   };

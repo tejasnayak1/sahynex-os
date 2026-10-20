@@ -15,7 +15,7 @@ export const viewport: Viewport = {
 };
 
 // Applies the saved/system theme before paint to avoid a flash of the wrong theme.
-const themeScript = `try{var t=localStorage.getItem('sx.theme');if(!t){t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light'}document.documentElement.dataset.theme=t}catch(e){}`;
+const themeScript = `try{var t=localStorage.getItem('sx.theme');if(!t){t='dark'}document.documentElement.dataset.theme=t}catch(e){}`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

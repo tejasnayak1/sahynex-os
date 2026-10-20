@@ -10,6 +10,8 @@ export type UserActor = {
   email: string;
   roleKey: RoleKey | string;
   roleName: string;
+  /** Display-only job title, e.g. "CMO". */
+  jobTitle?: string | null;
   /** Set for external client reviewers only. */
   clientId: string | null;
   permissions: ReadonlySet<Permission>;

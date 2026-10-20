@@ -194,6 +194,17 @@ export async function changeOwnPassword(actor: Actor, current: string, next: str
   await audit(db, actor, 'user.password_changed', 'user', actor.id);
 }
 
+/** A person's own job title (display only — it grants nothing). */
+export async function setOwnJobTitle(actor: Actor, raw: unknown) {
+  if (actor.kind !== 'user') throw forbidden();
+  const title = typeof raw === 'string' ? raw.trim().slice(0, 80) : '';
+  await db
+    .update(users)
+    .set({ jobTitle: title || null })
+    .where(eq(users.id, actor.id));
+  await audit(db, actor, 'user.job_title_changed', 'user', actor.id, { after: { jobTitle: title || null } });
+}
+
 /* ------------------------------------------------------------------ roles */
 
 export async function listRoles(orgId: string) {

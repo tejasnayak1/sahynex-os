@@ -11,6 +11,8 @@ export function Dialog({
   triggerSize = 'md',
   wide,
   triggerClassName,
+  guardUnsaved,
+  triggerLabel,
 }: {
   trigger: ReactNode;
   title: string;
@@ -19,10 +21,15 @@ export function Dialog({
   triggerSize?: 'sm' | 'md';
   wide?: boolean;
   triggerClassName?: string;
+  /** Ask before closing if anything inside was edited (closing after a successful save never asks). */
+  guardUnsaved?: boolean;
+  /** Accessible name for the trigger when its visible text is ambiguous (e.g. "Edit"). */
+  triggerLabel?: string;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
   const [open, setOpen] = useState(false);
+  const dirty = useRef(false);
   useEffect(() => {
     const d = ref.current;
     if (!d) return;
@@ -30,18 +37,31 @@ export function Dialog({
     if (!open && d.open) d.close();
   }, [open]);
   const close = () => setOpen(false);
+  const requestClose = () => {
+    if (guardUnsaved && dirty.current && !window.confirm('Discard your unsaved changes?')) return false;
+    setOpen(false);
+    return true;
+  };
   return (
     <>
       <button
         type="button"
         className={cn(buttonClass(triggerVariant, triggerSize), triggerClassName)}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          dirty.current = false;
+          setOpen(true);
+        }}
+        aria-label={triggerLabel}
       >
         {trigger}
       </button>
       <dialog
         ref={ref}
         onClose={close}
+        onCancel={(e) => {
+          // Esc: keep the dialog open if the person chooses not to discard their edits.
+          if (!requestClose()) e.preventDefault();
+        }}
         aria-labelledby={titleId}
         className={cn(
           'm-auto w-[calc(100vw-32px)] rounded-lg border border-line bg-surface p-0 text-ink shadow-[0_20px_60px_rgb(10_20_30/0.25)]',
@@ -56,14 +76,20 @@ export function Dialog({
               </h2>
               <button
                 type="button"
-                onClick={close}
+                onClick={requestClose}
                 className={buttonClass('ghost', 'sm')}
                 aria-label="Close dialog"
               >
                 ✕
               </button>
             </div>
-            <div className="overflow-y-auto px-5 py-4">{children(close)}</div>
+            <div
+              className="overflow-y-auto px-5 py-4"
+              onInput={() => (dirty.current = true)}
+              onChange={() => (dirty.current = true)}
+            >
+              {children(close)}
+            </div>
           </div>
         ) : null}
       </dialog>

@@ -75,19 +75,24 @@ export type BriefContent = {
   strategies: Array<{ title: string; why: string; action: string }>;
   social: string[];
   trends: string[];
+  /** What a supplied (real) platform/news headline means for the team. Never a new claim of news. */
+  implications?: Array<{ headline: string; action: string }>;
 };
 
-const SYSTEM = `You write a short morning brief for the co-founder/CMO of Sahynex, a brand, growth and technology studio in Mangaluru, India that runs admissions marketing (Meta, Google, social, websites) for educational institutions.
+const SYSTEM = `You write a short morning brief for the co-founder/CMO of Sahynex, a brand, growth and technology studio in Mangaluru, India that runs admissions marketing (Meta, Google, social, websites) for educational institutions, mainly Indian engineering and technology colleges.
 
 Rules:
-- Use ONLY the facts in the JSON you are given (and web search results if you have them). Never invent numbers, names or events. If something is missing, say it is not available.
-- If you have no web search results, write "trends" as general, evergreen admissions-marketing patterns and do not present them as today's news.
+- Use ONLY the facts in the JSON you are given (and web search results if you have them). Never invent numbers, names, events, rankings, placements or news. If something is missing, say it is not available.
 - Be specific and practical: reference the actual tasks, leads, campaigns and Instagram posts in the facts.
-- Strategies are ideas, clearly framed as suggestions.
-- Keep it short: summary ≤ 3 sentences; 3 priorities; 3 strategies; up to 3 social insights; up to 3 trends.
+- "priorities": the 3 most important things to do today, from the facts.
+- "strategies": 3 actionable marketing or business ideas (awareness, consideration, conversion, lead generation, creative). They are suggestions, not facts.
+- "social": up to 3 observations from the Instagram facts only.
+- "implications": for up to 3 items in industryHeadlines, copy the headline EXACTLY and give one practical action for the team. Never mention a platform change that is not in industryHeadlines.
+- "trends": leave as an empty array unless you have web search results; never present general knowledge as current news.
+- Keep it short: summary ≤ 3 sentences.
 
 Return ONLY a JSON object with this shape and no other text:
-{"summary": string, "priorities": string[], "strategies": [{"title": string, "why": string, "action": string}], "social": string[], "trends": string[]}`;
+{"summary": string, "priorities": string[], "strategies": [{"title": string, "why": string, "action": string}], "social": string[], "implications": [{"headline": string, "action": string}], "trends": string[]}`;
 
 /** Pulls the first JSON object out of the model's text and validates its shape. */
 export function parseBrief(text: string): BriefContent {
@@ -107,12 +112,40 @@ export function parseBrief(text: string): BriefContent {
     : [];
   if (typeof raw.summary !== 'string' || !raw.summary.trim())
     throw new PermanentError('The AI response was missing a summary.');
+  const implications = Array.isArray(raw.implications)
+    ? raw.implications
+        .filter(
+          (x): x is { headline: string; action: string } =>
+            !!x && typeof x.headline === 'string' && typeof x.action === 'string' && !!x.action.trim(),
+        )
+        .slice(0, 3)
+        .map((x) => ({ headline: x.headline.trim(), action: x.action.trim() }))
+    : [];
   return {
     summary: raw.summary.trim(),
     priorities: strs(raw.priorities, 3),
     strategies,
     social: strs(raw.social, 3),
     trends: strs(raw.trends, 3),
+    implications,
+  };
+}
+
+/** Drops any "implication" whose headline is not one of the real headlines we supplied. */
+export function keepRealHeadlines(content: BriefContent, facts: Record<string, unknown>): BriefContent {
+  const supplied = Array.isArray(facts.industryHeadlines)
+    ? (facts.industryHeadlines as Array<{ title?: unknown }>).map((h) => String(h.title ?? '').toLowerCase())
+    : [];
+  const norm = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[“”"']/g, '')
+      .trim();
+  return {
+    ...content,
+    implications: (content.implications ?? []).filter((i) =>
+      supplied.some((t) => norm(t) === norm(i.headline) || norm(t).startsWith(norm(i.headline).slice(0, 40))),
+    ),
   };
 }
 
@@ -122,7 +155,7 @@ export async function generateBriefWithAI(
   const model = aiAdapter.model();
   if (aiProvider() === 'gemini') {
     const sent = env('AI_ANONYMISE') === 'false' ? facts : anonymiseFacts(facts);
-    return { content: parseBrief(await callGemini(model, sent)), model };
+    return { content: keepRealHeadlines(parseBrief(await callGemini(model, sent)), facts), model };
   }
   const body: Record<string, unknown> = {
     model,
@@ -146,7 +179,7 @@ export async function generateBriefWithAI(
     .filter((b) => b.type === 'text' && b.text)
     .map((b) => b.text)
     .join('\n');
-  return { content: parseBrief(text), model };
+  return { content: keepRealHeadlines(parseBrief(text), facts), model };
 }
 
 async function callGemini(model: string, facts: Record<string, unknown>): Promise<string> {
@@ -245,4 +278,84 @@ export function demoBrief(f: {
     ],
     trends: ['Trends need the AI assistant connected (with web search) — not available in sample mode.'],
   };
+}
+
+/**
+ * General-purpose JSON-returning completion on the configured provider (no web search). Used by
+ * features other than the daily brief, e.g. the Creative Studio. Callers validate the output.
+ */
+export async function aiJSONText(
+  system: string,
+  prompt: string,
+  opts: { maxTokens?: number } = {},
+): Promise<{ text: string; model: string }> {
+  const model = aiAdapter.model();
+  const maxTokens = opts.maxTokens ?? 3000;
+  if (aiProvider() === 'gemini') {
+    if (!/^[\w.-]{3,80}$/.test(model)) throw new PermanentError('AI_MODEL is not a valid Gemini model name.');
+    const res = (await apiFetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'x-goog-api-key': env('GEMINI_API_KEY'), 'content-type': 'application/json' },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: system }] },
+          contents: [{ role: 'user', parts: [{ text: prompt }] }],
+          generationConfig: {
+            maxOutputTokens: Math.max(maxTokens, 4096),
+            responseMimeType: 'application/json',
+          },
+        }),
+        timeoutMs: 90_000,
+      },
+    )) as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string; thought?: boolean }> };
+        finishReason?: string;
+      }>;
+      promptFeedback?: { blockReason?: string };
+    };
+    if (res.promptFeedback?.blockReason)
+      throw new PermanentError(`Gemini blocked the request (${res.promptFeedback.blockReason}).`);
+    const text = (res.candidates?.[0]?.content?.parts ?? [])
+      .filter((p) => p.text && !p.thought)
+      .map((p) => p.text)
+      .join('\n');
+    if (!text) throw new PermanentError('The AI returned an empty answer. Try again.');
+    return { text, model };
+  }
+  const res = (await apiFetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': env('ANTHROPIC_API_KEY'),
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: maxTokens,
+      system,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+    timeoutMs: 90_000,
+  })) as { content?: Array<{ type: string; text?: string }> };
+  const text = (res.content ?? [])
+    .filter((b) => b.type === 'text' && b.text)
+    .map((b) => b.text)
+    .join('\n');
+  if (!text) throw new PermanentError('The AI returned an empty answer. Try again.');
+  return { text, model };
+}
+
+/** Pulls the first JSON object out of a model reply. */
+export function extractJSON(text: string): unknown {
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start < 0 || end <= start)
+    throw new PermanentError('The AI response was not in the expected format. Try again.');
+  try {
+    return JSON.parse(text.slice(start, end + 1));
+  } catch {
+    throw new PermanentError('The AI response was not in the expected format. Try again.');
+  }
 }

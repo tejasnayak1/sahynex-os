@@ -1,7 +1,7 @@
 'use client';
 import { ActionForm, FormField, SubmitButton } from '@/components/client/action-form';
 import { inputClass } from '@/components/ui';
-import { passwordAction } from '../actions';
+import { jobTitleAction, passwordAction } from '../actions';
 
 export function PasswordForm() {
   return (
@@ -45,6 +45,23 @@ export function PasswordForm() {
       <div>
         <SubmitButton>Change password</SubmitButton>
       </div>
+    </ActionForm>
+  );
+}
+
+export function JobTitleForm({ value }: { value: string | null }) {
+  return (
+    <ActionForm action={jobTitleAction} className="flex max-w-md items-end gap-2">
+      <FormField label="Job title" name="jobTitle" hint="Shown under your name, e.g. CMO." className="flex-1">
+        <input
+          id="jobTitle"
+          name="jobTitle"
+          defaultValue={value ?? ''}
+          maxLength={80}
+          className={inputClass}
+        />
+      </FormField>
+      <SubmitButton>Save</SubmitButton>
     </ActionForm>
   );
 }

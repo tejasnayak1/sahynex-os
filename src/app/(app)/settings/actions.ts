@@ -193,3 +193,11 @@ export async function passwordAction(_: ActionState, fd: FormData) {
     };
   });
 }
+
+export async function jobTitleAction(_: ActionState, fd: FormData) {
+  return runAction(async (actor) => {
+    const { setOwnJobTitle } = await import('@/server/services/admin');
+    await setOwnJobTitle(actor, fd.get('jobTitle'));
+    return { ok: true, message: 'Job title saved' };
+  });
+}
